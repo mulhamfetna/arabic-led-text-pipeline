@@ -16,15 +16,28 @@
  *
  * This is a property of the physical board, not of the MAX7219 chip: generic
  * modules wire the digit and segment lines to the grid differently, and there
- * is no way to read it back over SPI. Determine it once with the bring-up
- * pattern, then set it in menuconfig.
+ * is no way to read it back over SPI (the part has no MISO). Determine it once
+ * with the bring-up pattern, then set it in menuconfig.
+ *
+ * The space is exactly the eight symmetries of a square: whether the digit
+ * axis runs along rows or columns (transpose), times a flip on each axis.
+ * An earlier version offered only four of these - flipping the bit order but
+ * never the digit order - and could not describe a module whose digit 0 is the
+ * bottom row. All eight are needed.
  */
-typedef enum {
-    MAX7219_MAP_ROW_MAJOR,      /* digit N = pixel row N, bit 7 = leftmost   */
-    MAX7219_MAP_COL_MAJOR,      /* digit N = pixel column N, bit 7 = topmost */
-    MAX7219_MAP_ROW_MAJOR_REV,  /* row-addressed, bit 0 = leftmost           */
-    MAX7219_MAP_COL_MAJOR_REV,  /* column-addressed, bit 0 = topmost         */
+typedef struct {
+    bool transpose;     /* digit selects a column rather than a row */
+    bool flip_x;
+    bool flip_y;
 } max7219_mapping_t;
+
+#define MAX7219_ORIENTATION_COUNT 8
+
+/* Orientation for index 0..7, for cycling through candidates at bring-up. */
+max7219_mapping_t max7219_orientation(int index);
+
+/* Human-readable name, e.g. "transpose+flipY". Valid for index 0..7. */
+const char *max7219_orientation_name(int index);
 
 /*
  * How chain position maps onto a 2D arrangement of modules.

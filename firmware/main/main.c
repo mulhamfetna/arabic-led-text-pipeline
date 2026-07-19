@@ -23,17 +23,11 @@ static const char *TAG = "main";
 static max7219_dev_t *s_panel;
 static framebuffer_t  s_fb;
 
-#if defined(CONFIG_MAX7219_MAP_ROW)
-#  define CONFIGURED_MAPPING MAX7219_MAP_ROW_MAJOR
-#elif defined(CONFIG_MAX7219_MAP_COL)
-#  define CONFIGURED_MAPPING MAX7219_MAP_COL_MAJOR
-#elif defined(CONFIG_MAX7219_MAP_ROW_REV)
-#  define CONFIGURED_MAPPING MAX7219_MAP_ROW_MAJOR_REV
-#elif defined(CONFIG_MAX7219_MAP_COL_REV)
-#  define CONFIGURED_MAPPING MAX7219_MAP_COL_MAJOR_REV
-#else
-#  define CONFIGURED_MAPPING MAX7219_MAP_ROW_MAJOR   /* unknown: pattern mode */
+#if CONFIG_MAX7219_ORIENTATION < 0
 #  define MAPPING_UNKNOWN 1
+#  define CONFIGURED_ORIENTATION 0
+#else
+#  define CONFIGURED_ORIENTATION CONFIG_MAX7219_ORIENTATION
 #endif
 
 /* Set once the first real frame arrives, so the pattern stops getting in the way. */
@@ -59,31 +53,24 @@ static void bringup_pattern(void)
     const uint16_t w = max7219_width(s_panel);
     const uint16_t h = max7219_height(s_panel);
 
-    static const max7219_mapping_t candidates[] = {
-        MAX7219_MAP_ROW_MAJOR,
-        MAX7219_MAP_COL_MAJOR,
-        MAX7219_MAP_ROW_MAJOR_REV,
-        MAX7219_MAP_COL_MAJOR_REV,
-    };
-    static const char *names[] = { "ROW", "COL", "ROW_REV", "COL_REV" };
-
     while (!s_got_frame) {
-        for (int c = 0; c < 4 && !s_got_frame; c++) {
-            max7219_set_mapping(s_panel, candidates[c]);
-            ESP_LOGI(TAG, "=== trying mapping %s ===", names[c]);
+        for (int i = 0; i < MAX7219_ORIENTATION_COUNT && !s_got_frame; i++) {
+            max7219_set_mapping(s_panel, max7219_orientation(i));
+            ESP_LOGI(TAG, "=== orientation %s ===", max7219_orientation_name(i));
 
             /*
              * Readable text is a far better mapping test than abstract shapes:
              * a human instantly sees mirrored, upside-down or rotated letters,
-             * whereas a lit line looks plausible under several mappings.
+             * whereas a lit line looks plausible under several orientations.
              */
             fb_clear(&s_fb);
             text5x7_draw(&s_fb, CONFIG_SELFTEST_WORD, 0, 0);
             show("the word " CONFIG_SELFTEST_WORD ", upright and readable");
 
+            /* Corner dot disambiguates the two flips once rotation is right. */
             fb_clear(&s_fb);
             fb_set_pixel(&s_fb, 0, 0, true);
-            show("single pixel, should be TOP-LEFT corner");
+            show("single pixel, should be the TOP-LEFT corner");
 
             /* An L: unambiguous under rotation and reflection. */
             fb_clear(&s_fb);
@@ -94,20 +81,6 @@ static void bringup_pattern(void)
                 fb_set_pixel(&s_fb, x, h - 1, true);
             }
             show("letter L, upright, at the far LEFT");
-
-            /* Lights modules left to right, revealing chain order. */
-            for (int m = 0; m * 8 < w && !s_got_frame; m++) {
-                fb_clear(&s_fb);
-                for (int y = 0; y < h; y++) {
-                    for (int x = m * 8; x < (m + 1) * 8 && x < w; x++) {
-                        fb_set_pixel(&s_fb, x, y, true);
-                    }
-                }
-                ESP_LOGI(TAG, "pattern: module %d of %d lit (counting from LEFT)",
-                         m, w / 8);
-                max7219_render(s_panel, &s_fb);
-                vTaskDelay(pdMS_TO_TICKS(700));
-            }
         }
     }
 }
@@ -162,7 +135,7 @@ void app_main(void)
         .cols      = CONFIG_MAX7219_COLS,
         .rows      = CONFIG_MAX7219_ROWS,
         .intensity = CONFIG_MAX7219_INTENSITY,
-        .mapping   = CONFIGURED_MAPPING,
+        .mapping   = max7219_orientation(CONFIGURED_ORIENTATION),
 #ifdef CONFIG_MAX7219_CHAIN_SERPENT
         .chain     = MAX7219_CHAIN_SERPENTINE,
 #else

@@ -228,35 +228,47 @@ static uint8_t pack_digit(const max7219_dev_t *dev, const framebuffer_t *fb,
     const int y0 = gy * MODULE_PX;
     uint8_t   out = 0;
 
-    for (int k = 0; k < MODULE_PX; k++) {
-        bool on;
-        int  bit;
+    for (int bit = 0; bit < MODULE_PX; bit++) {
+        /* Bit 7 is the first pixel along the segment axis, so invert. */
+        int u = 7 - bit;
+        int v = digit;
 
-        switch (dev->mapping) {
-        case MAX7219_MAP_ROW_MAJOR:
-            on  = fb_get_pixel(fb, x0 + k, y0 + digit);
-            bit = 7 - k;
-            break;
-        case MAX7219_MAP_ROW_MAJOR_REV:
-            on  = fb_get_pixel(fb, x0 + k, y0 + digit);
-            bit = k;
-            break;
-        case MAX7219_MAP_COL_MAJOR:
-            on  = fb_get_pixel(fb, x0 + digit, y0 + k);
-            bit = 7 - k;
-            break;
-        case MAX7219_MAP_COL_MAJOR_REV:
-        default:
-            on  = fb_get_pixel(fb, x0 + digit, y0 + k);
-            bit = k;
-            break;
-        }
+        /* Transpose first, then flip - the order matters for chirality. */
+        int px = dev->mapping.transpose ? v : u;
+        int py = dev->mapping.transpose ? u : v;
 
-        if (on) {
+        if (dev->mapping.flip_x) px = MODULE_PX - 1 - px;
+        if (dev->mapping.flip_y) py = MODULE_PX - 1 - py;
+
+        if (fb_get_pixel(fb, x0 + px, y0 + py)) {
             out |= (uint8_t)(1u << bit);
         }
     }
     return out;
+}
+
+max7219_mapping_t max7219_orientation(int index)
+{
+    return (max7219_mapping_t){
+        .transpose = (index & 1) != 0,
+        .flip_x    = (index & 2) != 0,
+        .flip_y    = (index & 4) != 0,
+    };
+}
+
+const char *max7219_orientation_name(int index)
+{
+    static const char *names[MAX7219_ORIENTATION_COUNT] = {
+        "0: plain",
+        "1: transpose",
+        "2: flipX",
+        "3: transpose+flipX",
+        "4: flipY",
+        "5: transpose+flipY",
+        "6: flipX+flipY",
+        "7: transpose+flipX+flipY",
+    };
+    return (index >= 0 && index < MAX7219_ORIENTATION_COUNT) ? names[index] : "?";
 }
 
 esp_err_t max7219_render(max7219_dev_t *dev, const framebuffer_t *fb)
