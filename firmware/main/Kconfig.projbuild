@@ -4,21 +4,25 @@ menu "Arabic LED text pipeline"
 
         config MAX7219_PIN_CLK
             int "CLK (SPI clock) GPIO"
-            default 18
+            default 14
             help
-                VSPI default is GPIO18. Change to match your wiring.
+                GPIO14 is HSPI's native SCK, and sits on the same header edge
+                as VIN/GND. See docs/wiring.md.
 
         config MAX7219_PIN_DIN
             int "DIN (SPI MOSI) GPIO"
-            default 23
+            default 13
             help
-                VSPI default is GPIO23.
+                GPIO13 is HSPI's native MOSI, adjacent to GND on the power edge.
 
         config MAX7219_PIN_CS
             int "CS (chip select / LOAD) GPIO"
-            default 5
+            default 27
             help
-                VSPI default is GPIO5.
+                GPIO27, not the physically closer GPIO12: GPIO12 is the MTDI
+                strapping pin and must be LOW at reset. A MAX7219 CS line
+                floating or pulled high at boot would select 1.8V flash and
+                brick the boot until the wire is removed.
 
         config MAX7219_MODULES
             int "Number of cascaded 8x8 modules"
@@ -58,18 +62,48 @@ menu "Arabic LED text pipeline"
             bool "Column-addressed, rows reversed"
     endchoice
 
+    menu "WiFi access point"
+
+        config AP_SSID
+            string "Access point name (SSID)"
+            default "ARABIC-LED"
+            help
+                The network the phone joins. No router is involved.
+
+        config AP_PASSWORD
+            string "Access point password"
+            default ""
+            help
+                Leave empty for an open network. WPA2 requires at least 8
+                characters - a shorter one is rejected outright, so the
+                firmware falls back to open rather than failing to start.
+
+    endmenu
+
     menu "Frame link"
+
+        config FRAME_UART_ENABLE
+            bool "Also accept frames over UART"
+            default n
+            help
+                The web UI is the primary transport, so this is off by default.
+
+                Installing the UART driver on UART0 fights the console driver
+                that ESP-IDF logs through, which corrupts log output. If you
+                enable this, put it on UART1 or UART2 with its own pins rather
+                than sharing UART0 with the console.
 
         config FRAME_UART_NUM
             int "UART port number"
+            depends on FRAME_UART_ENABLE
             range 0 2
-            default 0
+            default 2
             help
-                0 is the USB-serial console port, which is convenient for
-                bring-up but shares the link with log output.
+                Avoid 0: it is the console port. See the warning above.
 
         config FRAME_UART_BAUD
             int "UART baud rate"
+            depends on FRAME_UART_ENABLE
             default 115200
 
         config FRAME_MAX_PAYLOAD

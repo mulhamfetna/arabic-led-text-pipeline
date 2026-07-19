@@ -85,7 +85,12 @@ esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
     }
     dev->modules = cfg->modules;
     dev->mapping = cfg->mapping;
-    dev->host    = SPI3_HOST;   /* VSPI */
+    /*
+     * HSPI, because the default wiring (CLK=14, DIN=13) is HSPI's native IOMUX
+     * pair and both sit on the same header edge as VIN/GND - one connector,
+     * five adjacent wires. VSPI would route via the GPIO matrix instead.
+     */
+    dev->host    = SPI2_HOST;
 
     dev->txbuf = heap_caps_malloc((size_t)cfg->modules * 2, MALLOC_CAP_DMA);
     if (!dev->txbuf) {
