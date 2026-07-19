@@ -15,8 +15,8 @@ authors:
 version: 0.1.0
 date-released: "2026-07-19"
 license: AGPL-3.0-or-later
-url: "https://github.com/molhamfetnah/arabic-led-text-pipeline"
-repository-code: "https://github.com/molhamfetnah/arabic-led-text-pipeline"
+url: "https://github.com/mulhamfetna/arabic-led-text-pipeline"
+repository-code: "https://github.com/mulhamfetna/arabic-led-text-pipeline"
 keywords:
   - arabic-text-rendering
   - unicode-shaping

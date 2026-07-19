@@ -9,7 +9,7 @@ the design is `about.md` (pipeline, protocol sketch, product concept) and `crrun
 (hardware actually on hand; note the typo'd filename — keep it or rename deliberately, don't create
 a duplicate).
 
-Published as `molhamfetnah/arabic-led-text-pipeline` (AGPL-3.0-or-later, Zenodo-archived). The local
+Published as `mulhamfetna/arabic-led-text-pipeline` (AGPL-3.0-or-later, Zenodo-archived). The local
 directory is still named `arabic-p10dmd`; the repo name is deliberately broader because the project
 expands past P10. It sits inside the `/mnt/data/projects` multi-project workspace — see the parent
 `CLAUDE.md` for workspace conventions.

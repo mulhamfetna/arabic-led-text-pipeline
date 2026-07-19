@@ -3,6 +3,7 @@
 **Unicode Arabic text rendering for LED dot-matrix displays.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![DOI](https://zenodo.org/badge/1305763463.svg)](https://zenodo.org/badge/latestdoi/1305763463)
 
 > ⚠️ **Status: design stage.** This repository currently contains the architecture and
 > protocol specification only — there is no working implementation yet. See
