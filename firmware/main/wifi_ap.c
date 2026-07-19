@@ -13,6 +13,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
+#include "dhcpserver/dhcpserver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -168,23 +169,55 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &cfg));
 
     /*
-     * The banner comes from two mechanisms working together:
+     * Hand out ourselves as the DNS server.
      *
-     *   1. DNS hijack - every lookup resolves to us (see dns_task).
+     * Without this the ESP32's DHCP server offers no DNS at all, so the phone
+     * either keeps a stale resolver or gives up - and the DNS hijack in
+     * dns_task never sees a single query. The captive portal then cannot
+     * trigger no matter how many probe URLs are redirected, because the phone
+     * never resolves the probe hostname in the first place.
+     *
+     * The stop/configure/start dance is required: dhcps options can only be
+     * set while the server is stopped.
+     */
+    ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif));
+
+    esp_netif_dns_info_t dns = {
+        .ip = {
+            .type = ESP_IPADDR_TYPE_V4,
+            .u_addr.ip4.addr = ESP_IP4TOADDR(192, 168, 4, 1),
+        },
+    };
+    ESP_ERROR_CHECK(esp_netif_set_dns_info(ap_netif, ESP_NETIF_DNS_MAIN, &dns));
+
+    uint8_t offer_dns = OFFER_DNS;
+    ESP_ERROR_CHECK(esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
+                                           ESP_NETIF_DOMAIN_NAME_SERVER,
+                                           &offer_dns, sizeof(offer_dns)));
+
+    /*
+     * Short lease. A phone that joined before the portal worked can otherwise
+     * sit on cached network state for hours before re-probing.
+     */
+    uint32_t lease_time = 5;    /* minutes */
+    esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
+                           ESP_NETIF_IP_ADDRESS_LEASE_TIME,
+                           &lease_time, sizeof(lease_time));
+
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
+
+    /*
+     * With DNS handed out, the banner comes from two mechanisms together:
+     *   1. DNS hijack - every lookup resolves to us (dns_task).
      *   2. Probe-URL redirects - the OS fetches its connectivity-check URL,
-     *      gets a 302 instead of the expected reply, and concludes it is
-     *      behind a portal (see http_ui.c).
+     *      gets a 302, and concludes it is behind a portal (http_ui.c).
      *
-     * This is the same approach MikroTik and hotel portals use, and it is what
-     * produces the tappable "Sign in to network" notification.
+     * Same approach MikroTik and hotel portals use.
      *
      * RFC 8910 DHCP option 114 would announce the portal URL directly and more
      * reliably on iOS 14+/Android 11+, but ESP_NETIF_CAPTIVEPORTAL_URI only
-     * exists from ESP-IDF v5.4 and this builds against v5.3.2. Worth revisiting
-     * on an IDF bump.
+     * exists from ESP-IDF v5.4 and this builds against v5.3.2.
      */
-    (void)ap_netif;
-
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "AP \"%s\" up (%s), http://192.168.4.1/",

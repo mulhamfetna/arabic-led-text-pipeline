@@ -64,26 +64,25 @@ menu "Arabic LED text pipeline"
 
     endmenu
 
-    choice MAX7219_ORIENTATION
-        prompt "Module pixel mapping"
-        default MAX7219_MAP_UNKNOWN
+    config MAX7219_ORIENTATION
+        int "Module pixel orientation (-1 = not yet determined)"
+        range -1 7
+        default -1
         help
-            Generic MAX7219 boards differ in how the chip's digit/segment lines
-            are wired to the LED grid, and it cannot be detected in software.
-            Run the bring-up pattern (see docs/bringup.md) and pick the mapping
-            whose output matches what you actually see on the panel.
+            Generic MAX7219 boards differ in how the chip's digit and segment
+            lines are wired to the LED grid, and it cannot be detected in
+            software - the part has no MISO to read back.
 
-        config MAX7219_MAP_UNKNOWN
-            bool "Not yet determined - boot into bring-up pattern"
-        config MAX7219_MAP_ROW
-            bool "Row-addressed (digit N = pixel row N)"
-        config MAX7219_MAP_COL
-            bool "Column-addressed (digit N = pixel column N)"
-        config MAX7219_MAP_ROW_REV
-            bool "Row-addressed, columns reversed"
-        config MAX7219_MAP_COL_REV
-            bool "Column-addressed, rows reversed"
-    endchoice
+            Leave at -1 to boot into the bring-up loop, which cycles all eight
+            orientations showing a readable glyph. Note the index whose output
+            is upright and correct, then set it here.
+
+            The eight values are the symmetries of a square:
+              0 plain          1 transpose
+              2 flipX          3 transpose+flipX
+              4 flipY          5 transpose+flipY
+              6 flipX+flipY    7 transpose+flipX+flipY
+
 
     menu "Hardware self-test (Latin reference)"
 
