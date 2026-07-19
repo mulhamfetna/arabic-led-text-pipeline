@@ -5,22 +5,42 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![DOI](https://zenodo.org/badge/1305763463.svg)](https://zenodo.org/badge/latestdoi/1305763463)
 
-> ⚠️ **Status: design stage.** This repository currently contains the architecture and
-> protocol specification only — there is no working implementation yet. See
-> [Roadmap](#roadmap) for what is planned and [Limitations](#limitations) for what
-> is not yet true.
+> ⚠️ **Status: early. Latin works on hardware; Arabic does not exist yet.**
+>
+> The ESP32 firmware runs: it drives a MAX7219 cascade, serves its own WiFi access point and
+> web UI, and renders scrolling Latin text from an embedded 5×7 font as a hardware self-test.
+> **The Arabic path — the actual point of the project — is not implemented.** See
+> [Limitations](#limitations).
 
 ## The problem
 
-Common closed-source LED matrix controllers render text from **bitmap fonts**: one fixed
-glyph image per character code. That model cannot represent Arabic.
-
 Arabic is cursive and right-to-left. Every letter takes a different shape depending on its
-neighbours — isolated, initial, medial, or final — and certain pairs must fuse into
-mandatory ligatures (`لا`, `الله`). A bitmap font keyed on code points produces
-disconnected, unreadable letterforms. The usual workarounds are pre-rendering fixed images
-per message, or shipping a hand-drawn bitmap font that supports only one size and a limited
-vocabulary.
+neighbours — isolated, initial, medial, or final — and certain pairs must fuse into mandatory
+ligatures (`لا`, `الله`). A bitmap font keyed on code points produces disconnected, unreadable
+letterforms.
+
+**The gap is specific, and narrower than "nobody has solved Arabic on embedded".** Arabic shaping
+and Unicode bidi already exist in open embedded C: [LVGL](https://github.com/lvgl/lvgl) (MIT) does
+both at runtime on a microcontroller, and standalone Arduino reshapers do positional substitution
+with 8×8 fonts. Credit where due — see [`docs/related-work.md`](docs/related-work.md).
+
+What is missing is Arabic on **LED dot-matrix panels** specifically:
+
+- **u8g2** drives MAX7219 and ships Persian fonts, but its maintainer has declined contextual
+  shaping since 2018 — *"I think this is not something for u8g2"* — while disconnected-letter
+  reports have stayed open from 2018 through 2024.
+- **ESPEasy's P104** (MD_Parola/MAX7219) ships an Arabic font whose own documentation says it
+  "should not be used to 'translate' normal text to Arabic", because the fonts are 8-bit codepage
+  rather than Unicode.
+- **LVGL**, which does have shaping, targets anti-aliased TFT GUIs — not 1-bit panels at 8–16px.
+
+So: **an open, Unicode-correct (shaping + bidi) text pipeline for 1-bit LED matrices at 8–16px.**
+That is the gap.
+
+> On the commercial side, Arabic is not a documented *controller-firmware* capability — whatever
+> shaping happens, happens upstream in closed Windows authoring software. That means the industry
+> already uses a host-shapes-then-ships-bitmap split, the same architecture as this project. It
+> validates the approach rather than distinguishing it.
 
 ## The approach
 
@@ -100,11 +120,18 @@ wire protocol and CRC → ESP32 receiver and MAX7219 driver → P10 driver → d
 
 ## Limitations
 
-Stated plainly, because none of this is built yet:
+Stated plainly:
 
-- **No implementation exists.** This repository is a specification, not working software.
+- **Whether browser-side shaping is novel is unverified.** A survey found no confirmation either
+  way that canvas/WASM shaping emitting a packed 1-bit framebuffer to an MCU has been done before.
+  Treat it as a reasonable architecture, not a claimed first.
+- **No published work was found** on Arabic legibility at 8–16px, so whether a purpose-designed
+  low-resolution glyph set is needed remains an open question.
+- **The Arabic path is unimplemented.** The web UI shapes text via canvas, but has not been
+  validated against real Arabic on hardware. Only the Latin self-test is proven end to end.
 - Monochrome only — the format is 1 bit per pixel; colour panels are not yet addressed.
-- The MAX7219 and P10 differ in addressing, and the transposition layer is designed but untested.
+- MAX7219 works; **P10 is not implemented**. The transposition layer is written and
+  orientation-verified on the host, but P10's row-major addressing is untested.
 - Rendering quality at very small pixel heights (7–16 px) is the hardest open problem, and
   the threshold value is expected to need per-font tuning.
 
