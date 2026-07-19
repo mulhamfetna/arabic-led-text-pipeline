@@ -13,7 +13,9 @@
 
 #include "frame_rx.h"
 #include "framebuffer.h"
+#include "http_ui.h"
 #include "max7219.h"
+#include "wifi_ap.h"
 
 static const char *TAG = "main";
 
@@ -33,8 +35,14 @@ static framebuffer_t  s_fb;
 #  define MAPPING_UNKNOWN 1
 #endif
 
+/* Set once the first real frame arrives, so the pattern stops getting in the way. */
+static volatile bool s_got_frame;
+
 static void show(const char *what)
 {
+    if (s_got_frame) {
+        return;
+    }
     ESP_LOGI(TAG, "pattern: %s", what);
     max7219_render(s_panel, &s_fb);
     vTaskDelay(pdMS_TO_TICKS(2500));
@@ -58,8 +66,8 @@ static void bringup_pattern(void)
     };
     static const char *names[] = { "ROW", "COL", "ROW_REV", "COL_REV" };
 
-    for (;;) {
-        for (int c = 0; c < 4; c++) {
+    while (!s_got_frame) {
+        for (int c = 0; c < 4 && !s_got_frame; c++) {
             max7219_set_mapping(s_panel, candidates[c]);
             ESP_LOGI(TAG, "=== trying mapping %s ===", names[c]);
 
@@ -90,7 +98,7 @@ static void bringup_pattern(void)
             show("letter L, upright, at the far LEFT");
 
             /* Lights modules left to right, revealing chain order. */
-            for (int m = 0; m * 8 < w; m++) {
+            for (int m = 0; m * 8 < w && !s_got_frame; m++) {
                 fb_clear(&s_fb);
                 for (int y = 0; y < h; y++) {
                     for (int x = m * 8; x < (m + 1) * 8 && x < w; x++) {
@@ -106,7 +114,6 @@ static void bringup_pattern(void)
     }
 }
 
-#ifndef MAPPING_UNKNOWN
 static void on_frame(const uint8_t *payload, uint8_t w_bytes, uint8_t h_rows, void *user)
 {
     (void)user;
@@ -117,10 +124,10 @@ static void on_frame(const uint8_t *payload, uint8_t w_bytes, uint8_t h_rows, vo
                  w_bytes * 8, h_rows, (unsigned)len, (unsigned)s_fb.size);
         return;
     }
+    s_got_frame = true;
     max7219_render(s_panel, &s_fb);
     ESP_LOGI(TAG, "rendered frame %ux%u", w_bytes * 8, h_rows);
 }
-#endif
 
 void app_main(void)
 {
@@ -140,14 +147,27 @@ void app_main(void)
         return;
     }
 
-#ifdef MAPPING_UNKNOWN
-    ESP_LOGW(TAG, "module mapping not configured - running bring-up pattern.");
-    ESP_LOGW(TAG, "Watch the panel, then set it via: idf.py menuconfig");
-    bringup_pattern();   /* never returns */
-#else
+    /*
+     * WiFi and the web UI come up regardless of whether the pixel mapping is
+     * known: the phone should be able to connect and send something even while
+     * the bring-up pattern is still running, and the first frame it sends is
+     * what stops the pattern.
+     */
+    ESP_ERROR_CHECK(wifi_ap_start(CONFIG_AP_SSID, CONFIG_AP_PASSWORD));
+    ESP_ERROR_CHECK(http_ui_start(max7219_width(s_panel), max7219_height(s_panel),
+                                  on_frame, NULL));
+
+#ifdef CONFIG_FRAME_UART_ENABLE
     ESP_ERROR_CHECK(frame_rx_start(CONFIG_FRAME_UART_NUM, CONFIG_FRAME_UART_BAUD,
                                    UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
                                    on_frame, NULL));
-    ESP_LOGI(TAG, "waiting for frames");
 #endif
+
+#ifdef MAPPING_UNKNOWN
+    ESP_LOGW(TAG, "module mapping not configured - running bring-up pattern.");
+    ESP_LOGW(TAG, "Watch the panel, then set it via: idf.py menuconfig");
+    bringup_pattern();
+#endif
+    ESP_LOGI(TAG, "ready - join \"%s\", then open http://192.168.4.1/",
+             CONFIG_AP_SSID);
 }

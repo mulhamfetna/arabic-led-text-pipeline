@@ -49,6 +49,28 @@ Because the MCU holds no font and no text logic, **any** microcontroller can imp
 receiver from the wire format alone, and adding a new font or font size costs nothing on the
 device.
 
+## Using it from a phone
+
+The ESP32 runs its own WiFi access point and web server, so no router, no app, and no internet
+are involved:
+
+1. Power the board. It advertises an open network named **`ARABIC-LED`**.
+2. Join it from the phone. A captive-portal DNS answers every lookup with the device, so the
+   phone should offer the page by itself; otherwise open **`http://192.168.4.1/`**.
+3. Type Arabic, watch the live preview, press send.
+
+**The shaping happens in the phone's browser.** Canvas `fillText` already drives the platform's
+full text engine — contextual forms and ligatures included — so the page renders, thresholds and
+packs the pixels, and POSTs finished bytes. The ESP32 still stores no font and runs no text logic,
+exactly as the architecture requires; the browser simply *is* the host.
+
+> Bluetooth cannot do this. A phone browser cannot open a page over BLE — Web Bluetooth needs a
+> page already served over HTTPS from the internet, and iOS Safari does not support it at all.
+> WiFi SoftAP is the only approach that works with a stock phone and no installed app.
+
+See [`docs/wiring.md`](docs/wiring.md) for hookup and [`docs/bringup.md`](docs/bringup.md) for
+first-light.
+
 ## Wire format
 
 ```
