@@ -1,0 +1,21 @@
+{
+  "title": "arabic-led-text-pipeline: Unicode Arabic text rendering for LED dot-matrix displays",
+  "description": "An open host-to-microcontroller pipeline that renders correctly shaped Unicode Arabic text to monochrome LED dot-matrix displays (P10, MAX7219, and addressable LED chains). Contextual shaping (initial/medial/final forms, ligatures) and rasterisation happen on the host via HarfBuzz and a TrueType font, so the microcontroller receives only a pre-rendered 1-bit framebuffer and needs no font or text logic. Addresses the inability of common closed-source LED controllers, which rely on bitmap fonts, to render cursive right-to-left Arabic correctly.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "AGPL-3.0-or-later",
+  "creators": [
+    {
+      "name": "Fetna, Mulham",
+      "orcid": "0009-0006-4432-798X"
+    }
+  ],
+  "keywords": [
+    "arabic text rendering",
+    "unicode shaping",
+    "LED matrix",
+    "embedded systems",
+    "ESP32",
+    "HarfBuzz"
+  ]
+}

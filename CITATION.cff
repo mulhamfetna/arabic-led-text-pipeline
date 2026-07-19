@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+title: "arabic-led-text-pipeline: Unicode Arabic text rendering for LED dot-matrix displays"
+abstract: >-
+  An open host-to-microcontroller pipeline that renders correctly shaped Unicode
+  Arabic text to monochrome LED dot-matrix displays (P10, MAX7219, and addressable
+  LED chains), performing HarfBuzz-based contextual shaping and rasterisation on the
+  host so the microcontroller receives only a pre-rendered 1-bit framebuffer.
+type: software
+authors:
+  - family-names: Fetna
+    given-names: Mulham
+    orcid: "https://orcid.org/0009-0006-4432-798X"
+    email: contact@mulhamfetna.com
+version: 0.1.0
+date-released: "2026-07-19"
+license: AGPL-3.0-or-later
+url: "https://github.com/molhamfetnah/arabic-led-text-pipeline"
+repository-code: "https://github.com/molhamfetnah/arabic-led-text-pipeline"
+keywords:
+  - arabic-text-rendering
+  - unicode-shaping
+  - led-matrix
+  - embedded-systems
+  - esp32
+  - harfbuzz
