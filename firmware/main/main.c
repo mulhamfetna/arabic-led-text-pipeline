@@ -15,6 +15,7 @@
 #include "framebuffer.h"
 #include "http_ui.h"
 #include "max7219.h"
+#include "text5x7.h"
 #include "wifi_ap.h"
 
 static const char *TAG = "main";
@@ -71,21 +72,18 @@ static void bringup_pattern(void)
             max7219_set_mapping(s_panel, candidates[c]);
             ESP_LOGI(TAG, "=== trying mapping %s ===", names[c]);
 
+            /*
+             * Readable text is a far better mapping test than abstract shapes:
+             * a human instantly sees mirrored, upside-down or rotated letters,
+             * whereas a lit line looks plausible under several mappings.
+             */
+            fb_clear(&s_fb);
+            text5x7_draw(&s_fb, CONFIG_SELFTEST_WORD, 0, 0);
+            show("the word " CONFIG_SELFTEST_WORD ", upright and readable");
+
             fb_clear(&s_fb);
             fb_set_pixel(&s_fb, 0, 0, true);
             show("single pixel, should be TOP-LEFT corner");
-
-            fb_clear(&s_fb);
-            for (int x = 0; x < w; x++) {
-                fb_set_pixel(&s_fb, x, 0, true);
-            }
-            show("horizontal line, should be the TOP edge, full width");
-
-            fb_clear(&s_fb);
-            for (int y = 0; y < h; y++) {
-                fb_set_pixel(&s_fb, 0, y, true);
-            }
-            show("vertical line, should be the LEFT edge, 8px tall");
 
             /* An L: unambiguous under rotation and reflection. */
             fb_clear(&s_fb);
@@ -114,6 +112,32 @@ static void bringup_pattern(void)
     }
 }
 
+#if defined(CONFIG_SELFTEST_ENABLE) && !defined(MAPPING_UNKNOWN)
+/*
+ * Scrolls a Latin message across the panel once. Proves the whole chain -
+ * wiring, SPI, cascade order, grid layout, pixel mapping, packing - with text
+ * whose correct appearance needs no interpretation. On an 8x8 panel only one
+ * character is visible at a time, which is exactly why it scrolls.
+ */
+static void scroll_selftest(const char *msg)
+{
+    const int tw = text5x7_width(msg);
+    const int y  = (s_fb.height - FONT5X7_HEIGHT) / 2;   /* vertically centred */
+
+    ESP_LOGI(TAG, "self-test: scrolling \"%s\" (%dpx) across %ux%u",
+             msg, tw, s_fb.width, s_fb.height);
+
+    for (int x = s_fb.width; x > -tw && !s_got_frame; x--) {
+        fb_clear(&s_fb);
+        text5x7_draw(&s_fb, msg, x, y);
+        max7219_render(s_panel, &s_fb);
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_SELFTEST_SCROLL_MS));
+    }
+    fb_clear(&s_fb);
+    max7219_render(s_panel, &s_fb);
+}
+#endif
+
 static void on_frame(const uint8_t *payload, uint8_t w_bytes, uint8_t h_rows, void *user)
 {
     (void)user;
@@ -135,9 +159,15 @@ void app_main(void)
         .pin_clk   = CONFIG_MAX7219_PIN_CLK,
         .pin_din   = CONFIG_MAX7219_PIN_DIN,
         .pin_cs    = CONFIG_MAX7219_PIN_CS,
-        .modules   = CONFIG_MAX7219_MODULES,
+        .cols      = CONFIG_MAX7219_COLS,
+        .rows      = CONFIG_MAX7219_ROWS,
         .intensity = CONFIG_MAX7219_INTENSITY,
         .mapping   = CONFIGURED_MAPPING,
+#ifdef CONFIG_MAX7219_CHAIN_SERPENT
+        .chain     = MAX7219_CHAIN_SERPENTINE,
+#else
+        .chain     = MAX7219_CHAIN_ROW_MAJOR,
+#endif
     };
 
     ESP_ERROR_CHECK(max7219_init(&cfg, &s_panel));
@@ -167,6 +197,8 @@ void app_main(void)
     ESP_LOGW(TAG, "module mapping not configured - running bring-up pattern.");
     ESP_LOGW(TAG, "Watch the panel, then set it via: idf.py menuconfig");
     bringup_pattern();
+#elif defined(CONFIG_SELFTEST_ENABLE)
+    scroll_selftest(CONFIG_SELFTEST_TEXT);
 #endif
     ESP_LOGI(TAG, "ready - join \"%s\", then open http://192.168.4.1/",
              CONFIG_AP_SSID);

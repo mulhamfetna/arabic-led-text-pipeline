@@ -4,6 +4,8 @@ idf_component_register(
         "max7219.c"
         "framebuffer.c"
         "frame_rx.c"
+        "font5x7.c"
+        "text5x7.c"
         "wifi_ap.c"
         "http_ui.c"
     INCLUDE_DIRS "."
