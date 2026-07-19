@@ -1,0 +1,83 @@
+menu "Arabic LED text pipeline"
+
+    menu "MAX7219 wiring"
+
+        config MAX7219_PIN_CLK
+            int "CLK (SPI clock) GPIO"
+            default 18
+            help
+                VSPI default is GPIO18. Change to match your wiring.
+
+        config MAX7219_PIN_DIN
+            int "DIN (SPI MOSI) GPIO"
+            default 23
+            help
+                VSPI default is GPIO23.
+
+        config MAX7219_PIN_CS
+            int "CS (chip select / LOAD) GPIO"
+            default 5
+            help
+                VSPI default is GPIO5.
+
+        config MAX7219_MODULES
+            int "Number of cascaded 8x8 modules"
+            range 1 16
+            default 4
+            help
+                A common "4-in-1" board is 4 modules = 32x8 pixels.
+
+        config MAX7219_INTENSITY
+            int "Initial brightness (0-15)"
+            range 0 15
+            default 2
+            help
+                MAX7219 at full intensity draws a lot of current; 2 is a safe
+                default for USB-powered bring-up.
+
+    endmenu
+
+    choice MAX7219_ORIENTATION
+        prompt "Module pixel mapping"
+        default MAX7219_MAP_UNKNOWN
+        help
+            Generic MAX7219 boards differ in how the chip's digit/segment lines
+            are wired to the LED grid, and it cannot be detected in software.
+            Run the bring-up pattern (see docs/bringup.md) and pick the mapping
+            whose output matches what you actually see on the panel.
+
+        config MAX7219_MAP_UNKNOWN
+            bool "Not yet determined - boot into bring-up pattern"
+        config MAX7219_MAP_ROW
+            bool "Row-addressed (digit N = pixel row N)"
+        config MAX7219_MAP_COL
+            bool "Column-addressed (digit N = pixel column N)"
+        config MAX7219_MAP_ROW_REV
+            bool "Row-addressed, columns reversed"
+        config MAX7219_MAP_COL_REV
+            bool "Column-addressed, rows reversed"
+    endchoice
+
+    menu "Frame link"
+
+        config FRAME_UART_NUM
+            int "UART port number"
+            range 0 2
+            default 0
+            help
+                0 is the USB-serial console port, which is convenient for
+                bring-up but shares the link with log output.
+
+        config FRAME_UART_BAUD
+            int "UART baud rate"
+            default 115200
+
+        config FRAME_MAX_PAYLOAD
+            int "Maximum frame payload (bytes)"
+            default 512
+            help
+                64x32 needs 256. 512 leaves room for wider scroll buffers.
+
+    endmenu
+
+endmenu

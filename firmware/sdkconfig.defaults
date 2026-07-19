@@ -1,0 +1,14 @@
+# Frame payloads arrive over UART at this rate. 115200 is safe on CH340 clones;
+# raise it once the link is proven stable.
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+
+# The receive task parses frames byte-at-a-time from a ring buffer; the default
+# 10ms tick makes the inter-byte timeout granularity coarser than we want.
+CONFIG_FREERTOS_HZ=1000
+
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# The ESP32-D0WD-V3 boards used here carry 4MB; without this the image header
+# claims 2MB and the bootloader logs a size-mismatch warning on every boot.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
