@@ -33,8 +33,11 @@ static const char *TAG = "max7219";
 struct max7219_dev {
     spi_device_handle_t spi;
     spi_host_device_t   host;
-    int      modules;
+    int      cols;
+    int      rows;
+    int      modules;           /* cols * rows */
     max7219_mapping_t mapping;
+    max7219_chain_t   chain;
     uint8_t *txbuf;             /* modules * 2 bytes, DMA-capable */
 };
 
@@ -75,7 +78,7 @@ static esp_err_t write_register_all(max7219_dev_t *dev, uint8_t reg, uint8_t val
 
 esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
 {
-    if (!cfg || !out || cfg->modules < 1) {
+    if (!cfg || !out || cfg->cols < 1 || cfg->rows < 1) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -83,8 +86,11 @@ esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
     if (!dev) {
         return ESP_ERR_NO_MEM;
     }
-    dev->modules = cfg->modules;
+    dev->cols    = cfg->cols;
+    dev->rows    = cfg->rows;
+    dev->modules = cfg->cols * cfg->rows;
     dev->mapping = cfg->mapping;
+    dev->chain   = cfg->chain;
     /*
      * HSPI, because the default wiring (CLK=14, DIN=13) is HSPI's native IOMUX
      * pair and both sit on the same header edge as VIN/GND - one connector,
@@ -92,7 +98,7 @@ esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
      */
     dev->host    = SPI2_HOST;
 
-    dev->txbuf = heap_caps_malloc((size_t)cfg->modules * 2, MALLOC_CAP_DMA);
+    dev->txbuf = heap_caps_malloc((size_t)dev->modules * 2, MALLOC_CAP_DMA);
     if (!dev->txbuf) {
         free(dev);
         return ESP_ERR_NO_MEM;
@@ -104,7 +110,7 @@ esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
         .sclk_io_num     = cfg->pin_clk,
         .quadwp_io_num   = -1,
         .quadhd_io_num   = -1,
-        .max_transfer_sz = cfg->modules * 2,
+        .max_transfer_sz = dev->modules * 2,
     };
     esp_err_t err = spi_bus_initialize(dev->host, &bus, SPI_DMA_CH_AUTO);
     if (err != ESP_OK) {
@@ -138,8 +144,8 @@ esp_err_t max7219_init(const max7219_config_t *cfg, max7219_dev_t **out)
     max7219_clear(dev);
     write_register_all(dev, REG_SHUTDOWN,    0x01);  /* normal operation */
 
-    ESP_LOGI(TAG, "ready: %d module(s) = %dx%d px, clk=%d din=%d cs=%d",
-             dev->modules, max7219_width(dev), max7219_height(dev),
+    ESP_LOGI(TAG, "ready: %dx%d module(s) = %dx%d px, clk=%d din=%d cs=%d",
+             dev->cols, dev->rows, max7219_width(dev), max7219_height(dev),
              cfg->pin_clk, cfg->pin_din, cfg->pin_cs);
 
     *out = dev;
@@ -167,12 +173,12 @@ void max7219_deinit(max7219_dev_t *dev)
 
 uint16_t max7219_width(const max7219_dev_t *dev)
 {
-    return (uint16_t)(dev->modules * MODULE_PX);
+    return (uint16_t)(dev->cols * MODULE_PX);
 }
 
 uint16_t max7219_height(const max7219_dev_t *dev)
 {
-    return MODULE_PX;
+    return (uint16_t)(dev->rows * MODULE_PX);
 }
 
 esp_err_t max7219_set_intensity(max7219_dev_t *dev, uint8_t intensity)
@@ -207,7 +213,19 @@ esp_err_t max7219_clear(max7219_dev_t *dev)
 static uint8_t pack_digit(const max7219_dev_t *dev, const framebuffer_t *fb,
                           int mod, int digit)
 {
-    const int x0 = mod * MODULE_PX;
+    /*
+     * Chain position -> grid cell. With a single row this is the identity,
+     * which is why a 1x1 or 1xN setup needs no thought; it only matters once
+     * modules are stacked vertically.
+     */
+    const int gy = mod / dev->cols;
+    int       gx = mod % dev->cols;
+    if (dev->chain == MAX7219_CHAIN_SERPENTINE && (gy & 1)) {
+        gx = dev->cols - 1 - gx;
+    }
+
+    const int x0 = gx * MODULE_PX;
+    const int y0 = gy * MODULE_PX;
     uint8_t   out = 0;
 
     for (int k = 0; k < MODULE_PX; k++) {
@@ -216,20 +234,20 @@ static uint8_t pack_digit(const max7219_dev_t *dev, const framebuffer_t *fb,
 
         switch (dev->mapping) {
         case MAX7219_MAP_ROW_MAJOR:
-            on  = fb_get_pixel(fb, x0 + k, digit);
+            on  = fb_get_pixel(fb, x0 + k, y0 + digit);
             bit = 7 - k;
             break;
         case MAX7219_MAP_ROW_MAJOR_REV:
-            on  = fb_get_pixel(fb, x0 + k, digit);
+            on  = fb_get_pixel(fb, x0 + k, y0 + digit);
             bit = k;
             break;
         case MAX7219_MAP_COL_MAJOR:
-            on  = fb_get_pixel(fb, x0 + digit, k);
+            on  = fb_get_pixel(fb, x0 + digit, y0 + k);
             bit = 7 - k;
             break;
         case MAX7219_MAP_COL_MAJOR_REV:
         default:
-            on  = fb_get_pixel(fb, x0 + digit, k);
+            on  = fb_get_pixel(fb, x0 + digit, y0 + k);
             bit = k;
             break;
         }

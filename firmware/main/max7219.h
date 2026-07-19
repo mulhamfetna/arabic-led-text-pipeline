@@ -26,13 +26,27 @@ typedef enum {
     MAX7219_MAP_COL_MAJOR_REV,  /* column-addressed, bit 0 = topmost         */
 } max7219_mapping_t;
 
+/*
+ * How chain position maps onto a 2D arrangement of modules.
+ *
+ * The modules are always one electrical daisy-chain, but physically they may
+ * be laid out as a grid. Which module the Nth link lands on depends on how the
+ * builder ran the ribbon between rows.
+ */
+typedef enum {
+    MAX7219_CHAIN_ROW_MAJOR,    /* every row restarts at the left  */
+    MAX7219_CHAIN_SERPENTINE,   /* alternate rows run right-to-left */
+} max7219_chain_t;
+
 typedef struct {
     int  pin_clk;
     int  pin_din;
     int  pin_cs;
-    int  modules;               /* cascaded 8x8 units */
+    int  cols;                  /* modules across: panel is cols*8 px wide */
+    int  rows;                  /* modules down:  panel is rows*8 px tall  */
     uint8_t intensity;          /* 0-15 */
     max7219_mapping_t mapping;
+    max7219_chain_t   chain;
 } max7219_config_t;
 
 typedef struct max7219_dev max7219_dev_t;

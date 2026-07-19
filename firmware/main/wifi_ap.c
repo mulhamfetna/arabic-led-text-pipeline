@@ -133,7 +133,7 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init_cfg));
@@ -166,6 +166,25 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &cfg));
+
+    /*
+     * The banner comes from two mechanisms working together:
+     *
+     *   1. DNS hijack - every lookup resolves to us (see dns_task).
+     *   2. Probe-URL redirects - the OS fetches its connectivity-check URL,
+     *      gets a 302 instead of the expected reply, and concludes it is
+     *      behind a portal (see http_ui.c).
+     *
+     * This is the same approach MikroTik and hotel portals use, and it is what
+     * produces the tappable "Sign in to network" notification.
+     *
+     * RFC 8910 DHCP option 114 would announce the portal URL directly and more
+     * reliably on iOS 14+/Android 11+, but ESP_NETIF_CAPTIVEPORTAL_URI only
+     * exists from ESP-IDF v5.4 and this builds against v5.3.2. Worth revisiting
+     * on an IDF bump.
+     */
+    (void)ap_netif;
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "AP \"%s\" up (%s), http://192.168.4.1/",

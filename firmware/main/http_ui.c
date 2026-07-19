@@ -103,17 +103,32 @@ static esp_err_t frame_post(httpd_req_t *req)
 }
 
 /*
- * Every OS probes a different URL to detect a captive portal, and none of them
- * agree. Redirecting all unknown paths to the root covers the lot without
- * hardcoding Apple's, Google's and Microsoft's individual endpoints.
+ * Captive-portal detection.
+ *
+ * Each OS fetches its own URL after joining and decides it is behind a portal
+ * when the answer is not what it expected. Android wants a bare 204 from
+ * /generate_204; iOS wants a page containing "Success"; Windows wants the
+ * literal text "Microsoft NCSI". Answering any of them with a 302 instead is
+ * what raises the "Sign in to network" banner.
+ *
+ * These are registered explicitly rather than left to the 404 handler so the
+ * behaviour is visible and testable, and so a HEAD probe is handled too.
  */
+static esp_err_t portal_redirect(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
+    /* Stops the phone caching "this network is fine" from an earlier join. */
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store, must-revalidate");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+/* Anything not explicitly routed lands here, which covers probes not listed. */
 static esp_err_t redirect_to_root(httpd_req_t *req, httpd_err_code_t err)
 {
     (void)err;
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
+    return portal_redirect(req);
 }
 
 esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
@@ -130,7 +145,9 @@ esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
 
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 8;
+    cfg.max_uri_handlers = 16;
+    /* Phones open several probe connections at once while deciding. */
+    cfg.max_open_sockets = 7;
 
     httpd_handle_t server = NULL;
     esp_err_t err = httpd_start(&server, &cfg);
@@ -146,6 +163,27 @@ esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);
+    }
+
+    /* Connectivity-probe URLs, newest OS versions first. */
+    static const char *probes[] = {
+        "/generate_204",            /* Android                     */
+        "/gen_204",                 /* Android, older              */
+        "/hotspot-detect.html",     /* iOS, macOS                  */
+        "/library/test/success.html", /* iOS, older                */
+        "/connecttest.txt",         /* Windows 10/11               */
+        "/ncsi.txt",                /* Windows, older              */
+        "/redirect",                /* Windows                     */
+        "/success.txt",             /* Firefox                     */
+        "/canonical.html",          /* Ubuntu, GNOME               */
+        "/chat",                    /* KDE                         */
+    };
+    for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+        httpd_uri_t p = {
+            .uri = probes[i], .method = HTTP_GET,
+            .handler = portal_redirect, .user_ctx = ctx,
+        };
+        httpd_register_uri_handler(server, &p);
     }
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, redirect_to_root);
 

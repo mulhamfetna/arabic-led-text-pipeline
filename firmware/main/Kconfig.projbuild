@@ -24,12 +24,35 @@ menu "Arabic LED text pipeline"
                 floating or pulled high at boot would select 1.8V flash and
                 brick the boot until the wire is removed.
 
-        config MAX7219_MODULES
-            int "Number of cascaded 8x8 modules"
+        config MAX7219_COLS
+            int "Modules across (horizontal)"
             range 1 16
-            default 4
+            default 1
             help
-                A common "4-in-1" board is 4 modules = 32x8 pixels.
+                Panel width is COLS * 8 pixels. 1 for a single 8x8 module,
+                4 for the common "4-in-1" stick (32x8).
+
+        config MAX7219_ROWS
+            int "Modules down (vertical)"
+            range 1 8
+            default 1
+            help
+                Panel height is ROWS * 8 pixels. Leave at 1 for a single
+                horizontal strip; raise it when stacking strips to get taller
+                text. 4 cols x 2 rows gives 32x16, for example.
+
+        choice MAX7219_CHAIN
+            prompt "Chain layout (only matters when ROWS > 1)"
+            default MAX7219_CHAIN_ROWMAJOR
+            help
+                The modules are one electrical daisy-chain even when arranged
+                as a grid. This says how the ribbon runs between rows.
+
+            config MAX7219_CHAIN_ROWMAJOR
+                bool "Row-major - every row restarts at the left"
+            config MAX7219_CHAIN_SERPENT
+                bool "Serpentine - alternate rows run right-to-left"
+        endchoice
 
         config MAX7219_INTENSITY
             int "Initial brightness (0-15)"
@@ -61,6 +84,47 @@ menu "Arabic LED text pipeline"
         config MAX7219_MAP_COL_REV
             bool "Column-addressed, rows reversed"
     endchoice
+
+    menu "Hardware self-test (Latin reference)"
+
+        config SELFTEST_ENABLE
+            bool "Scroll a Latin test message at boot"
+            default y
+            help
+                Proves wiring, SPI, cascade order, pixel mapping and packing
+                using text whose correct appearance is unmistakable. Runs once
+                at boot and stops the moment a real frame arrives.
+
+                This is reference tooling, not the product's text path: Arabic
+                is shaped by the browser and arrives as pixels.
+
+        config SELFTEST_WORD
+            string "Short word for the mapping test"
+            default "R"
+            help
+                Shown static under each candidate mapping during bring-up.
+
+                The default is a single "R" because it fits an 8x8 module and
+                is asymmetric both horizontally and vertically - mirrored,
+                rotated or upside-down is obvious at a glance. A symmetric
+                glyph like H or O would look correct under several mappings
+                and tell you nothing.
+
+                At 6px per character, widen this once the panel is wider:
+                a 32px panel holds 5 characters.
+
+        config SELFTEST_TEXT
+            string "Scrolling test message"
+            depends on SELFTEST_ENABLE
+            default "HELLO WORLD 0123456789"
+
+        config SELFTEST_SCROLL_MS
+            int "Milliseconds per scroll step"
+            depends on SELFTEST_ENABLE
+            range 10 500
+            default 60
+
+    endmenu
 
     menu "WiFi access point"
 
