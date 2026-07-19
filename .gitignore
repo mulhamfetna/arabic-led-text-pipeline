@@ -13,6 +13,13 @@ venv/
 .piolibdeps/
 build/
 
+# ESP-IDF: sdkconfig is generated from sdkconfig.defaults, which IS tracked.
+# Committing it would pin another developer to this machine's board settings.
+sdkconfig
+sdkconfig.old
+dependencies.lock
+managed_components/
+
 # Generated framebuffers / previews (regenerate, don't commit)
 *.bin
 out/
