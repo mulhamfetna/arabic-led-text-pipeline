@@ -90,7 +90,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/panel":
-            body = json.dumps({"width": ARGS.width, "height": ARGS.height}).encode()
+            # Mirrors the firmware's /panel, including whether the attached
+            # panel can show colour - without it the page never offers the RGB
+            # path and the bridge cannot debug the thing it exists to debug.
+            body = json.dumps({"width": ARGS.width, "height": ARGS.height,
+                               "colour": ARGS.colour}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -133,11 +137,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             _ser.write(frame)
             _ser.flush()
 
-        print(f"  → {w_bytes*8}x{h_rows}px, {len(payload)}B payload, "
+        px_w = w_bytes if fmt == FMT_RGB else w_bytes * 8
+        print(f"  → {px_w}x{h_rows}px, {len(payload)}B payload, "
               f"{'rgb' if fmt == FMT_RGB else 'mono'}, "
               f"{'scroll '+('→RTL' if rightward else '←LTR')+'@'+str(speed)+'ms' if scroll else 'static'}, "
               f"crc={frame[-4:][::-1].hex()}")
-        render_ascii(payload, w_bytes, h_rows)
+        render_ascii(payload, w_bytes, h_rows, fmt)
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -145,18 +150,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(b'{"ok":true}')
 
 
-def render_ascii(payload: bytes, w_bytes: int, h_rows: int) -> None:
+def render_ascii(payload: bytes, w: int, h_rows: int, fmt: int = FMT_MONO) -> None:
     """
     Print what the panel should show.
 
-    This decodes the packed bytes the same way the firmware does, so a mismatch
-    between this and the physical panel isolates the fault to the driver's
-    orientation handling rather than to the browser's rendering.
+    Decodes the payload the same way the firmware does, so a mismatch between
+    this and the physical panel isolates the fault to the driver's orientation
+    handling rather than to the browser's rendering.
+
+    RGB and mono are decoded differently, and confusing them produces art that
+    is meaningless while still looking plausible - worse than printing nothing.
+    `w` is pixels for RGB and bytes for mono, matching the wire.
     """
+    if fmt == FMT_RGB:
+        # Shaded by luma, so the art shows both what a colour panel would light
+        # and what a monochrome one would make of the same frame.
+        ramp = " .:-=+*#%@"
+        for y in range(h_rows):
+            row = ""
+            for x in range(w):
+                i = (y * w + x) * 3
+                lum = (0.299 * payload[i] + 0.587 * payload[i + 1]
+                       + 0.114 * payload[i + 2])
+                row += ramp[min(len(ramp) - 1, int(lum / 256 * len(ramp)))]
+            print(f"    |{row}|")
+        return
+
     for y in range(h_rows):
         row = "".join(
-            "#" if payload[y * w_bytes + (x >> 3)] & (0x80 >> (x & 7)) else "."
-            for x in range(w_bytes * 8)
+            "#" if payload[y * w + (x >> 3)] & (0x80 >> (x & 7)) else "."
+            for x in range(w * 8)
         )
         print(f"    |{row}|")
 
@@ -179,6 +202,8 @@ def main():
     ap.add_argument("--http-port", type=int, default=8080)
     ap.add_argument("--width", type=int, default=8, help="panel width in pixels")
     ap.add_argument("--height", type=int, default=8, help="panel height in pixels")
+    ap.add_argument("--colour", action="store_true",
+                    help="pretend the panel shows colour, to exercise the RGB path")
     ap.add_argument("--watch", action="store_true", help="stream device logs")
     ARGS = ap.parse_args()
 
@@ -193,7 +218,8 @@ def main():
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", ARGS.http_port), Handler) as httpd:
         print(f"open http://127.0.0.1:{ARGS.http_port}/   "
-              f"(panel {ARGS.width}x{ARGS.height})")
+              f"(panel {ARGS.width}x{ARGS.height}, "
+              f"colour={'yes' if ARGS.colour else 'no'})")
         print("serving firmware/main/www/index.html - edit and reload to iterate\n")
         try:
             httpd.serve_forever()

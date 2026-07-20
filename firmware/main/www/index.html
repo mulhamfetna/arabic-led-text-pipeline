@@ -96,6 +96,15 @@
   </div>
   <div class="hint">سماكة الخط تحدد متى تُعتبر النقطة الرمادية مضاءة: القيمة الأقل تعطي خطاً أعرض، والأعلى أرفع.</div>
   <div class="hint" id="diag" style="font-variant-numeric:tabular-nums"></div>
+  <div id="colwrap" style="display:none; margin-top:12px">
+    <label>اللون <span class="val" id="colname"></span></label>
+    <div class="row">
+      <input type="color" id="col" value="#ff3b30"
+             style="height:44px; padding:4px; cursor:pointer">
+    </div>
+    <div class="hint" id="colhint"></div>
+  </div>
+
   <label for="font" style="margin-top:12px">الخط</label>
   <select id="font">
     <option value="system-ui, sans-serif">النظام</option>
@@ -118,7 +127,8 @@
 
   const $ = id => document.getElementById(id);
   const txt = $("txt"), size = $("size"), th = $("th"), font = $("font");
-  const speed = $("speed");
+  const speed = $("speed"), col = $("col");
+  let hasColour = false;    // filled from /panel: does the panel show colour?
   const mode = () => document.querySelector('input[name=mode]:checked').value;
   const preview = $("preview"), status = $("status");
 
@@ -216,6 +226,34 @@
      */
     const gain = peak > 8 ? 255 / peak : 1;
 
+    /*
+     * RGB skips thresholding entirely: coverage becomes alpha against the
+     * chosen colour, so an anti-aliased edge survives as a dimmer pixel rather
+     * than being forced to fully on or fully off. That is the one real gain of
+     * a colour panel at this size - the letterform keeps its shape instead of
+     * losing it to a hard cutoff.
+     *
+     * The preview draws from these same bytes, so 1:1 still holds.
+     */
+    if (hasColour) {
+      const c = col.value;
+      const cr = parseInt(c.slice(1, 3), 16),
+            cg = parseInt(c.slice(3, 5), 16),
+            cb = parseInt(c.slice(5, 7), 16);
+      const out = new Uint8Array(outW * H * 3);
+      let lit = 0;
+      for (let i = 0, p = 0; i < outW * H; i++, p += 3) {
+        const a = Math.min(255, cov[i] * gain) / 255;
+        out[p]     = Math.round(cr * a);
+        out[p + 1] = Math.round(cg * a);
+        out[p + 2] = Math.round(cb * a);
+        if (a > 0.02) lit++;
+      }
+      $("diag").textContent =
+        `ذروة ${Math.round(peak)} · معامل ${gain.toFixed(2)} · ${lit} نقطة · RGB`;
+      return out;
+    }
+
     const stride = Math.ceil(outW / 8);
     const out = new Uint8Array(stride * H);
     let lit = 0;
@@ -252,10 +290,17 @@
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < cols; x++) {
         const sx = offset + x;
-        const on = (sx >= 0 && sx < curW)
-          ? (bits[y * stride + (sx >> 3)] >> (7 - (sx & 7))) & 1
-          : 0;
-        pctx.fillStyle = on ? "#ff3b30" : "#1a1a1a";
+        let fill = "#1a1a1a";
+        if (sx >= 0 && sx < curW) {
+          if (hasColour) {
+            const p = (y * curW + sx) * 3;
+            const r = bits[p], g = bits[p + 1], b = bits[p + 2];
+            if (r || g || b) fill = `rgb(${r},${g},${b})`;
+          } else if ((bits[y * stride + (sx >> 3)] >> (7 - (sx & 7))) & 1) {
+            fill = col.value;
+          }
+        }
+        pctx.fillStyle = fill;
         pctx.beginPath();
         pctx.arc(x*dot + dot/2, y*dot + dot/2, dot*0.38, 0, 6.284);
         pctx.fill();
@@ -308,10 +353,13 @@
     status.className = "status";
     status.textContent = "جارٍ الإرسال…";
     try {
-      const stride = Math.ceil(curW / 8);
+      // RGB carries width in pixels; mono in bytes. The firmware reads each
+      // accordingly, so the two must not be confused here.
+      const wField = hasColour ? curW : Math.ceil(curW / 8);
       const r = await fetch(
-        `/frame?w=${stride}&h=${H}&mode=${mode()}&speed=${speed.value}`
-        + `&dir=${document.querySelector('input[name=dir]:checked').value}`, {
+        `/frame?w=${wField}&h=${H}&mode=${mode()}&speed=${speed.value}`
+        + `&dir=${document.querySelector('input[name=dir]:checked').value}`
+        + `&fmt=${hasColour ? 1 : 0}&rgb=${col.value.slice(1)}`, {
         method: "POST",
         headers: {"Content-Type": "application/octet-stream"},
         body: packed,
@@ -329,7 +377,7 @@
   }
 
   ["input", "change"].forEach(ev => {
-    [txt, size, th, font, speed].forEach(el => el.addEventListener(ev, update));
+    [txt, size, th, font, speed, col].forEach(el => el.addEventListener(ev, update));
     document.querySelectorAll('input[name=mode], input[name=dir]')
             .forEach(el => el.addEventListener(ev, update));
   });
@@ -338,7 +386,14 @@
 
   fetch("/panel")
     .then(r => r.json())
-    .then(p => { W = p.width; H = p.height; })
+    .then(p => {
+      W = p.width; H = p.height;
+      hasColour = !!p.colour;
+      $("colwrap").style.display = hasColour ? "" : "none";
+      $("colhint").textContent = hasColour
+        ? "اللوحة ملوّنة: حواف الحروف تتدرّج بدل أن تُقطع، فيبقى شكل الحرف أوضح."
+        : "";
+    })
     .catch(() => {})           // keep the 32x8 default if the probe fails
     .finally(() => {
       $("dims").textContent = `${W}×${H}`;
