@@ -85,15 +85,34 @@ static void dns_task(void *arg)
         while (p < len && buf[p] != 0) {
             p += buf[p] + 1;
         }
+        if (p + 5 > len) {
+            continue;
+        }
+        const uint16_t qtype = (uint16_t)((buf[p + 1] << 8) | buf[p + 2]);
         p += 1 + 4;     /* terminating zero + QTYPE + QCLASS */
         if (p > len || p + 16 > (int)sizeof(buf)) {
             continue;
         }
 
         hdr->flags    = htons(0x8180);  /* response, recursion available */
-        hdr->an_count = htons(1);
         hdr->ns_count = 0;
         hdr->ar_count = 0;
+
+        /*
+         * Only A queries get an address. Answering a AAAA query with a
+         * 4-byte A record is malformed, and a phone that rejects the reply
+         * may keep retrying IPv6 instead of falling back - which shows up as
+         * "connected, no internet" and no portal prompt at all.
+         *
+         * NOERROR with zero answers is the correct "no IPv6 here" reply and
+         * makes the client fall back to IPv4 immediately.
+         */
+        if (qtype != 1 /* A */) {
+            hdr->an_count = 0;
+            sendto(sock, buf, p, 0, (struct sockaddr *)&src, src_len);
+            continue;
+        }
+        hdr->an_count = htons(1);
 
         /* Answer: pointer back to the question's name, A/IN, TTL 60, our IP. */
         const uint8_t answer[] = {
