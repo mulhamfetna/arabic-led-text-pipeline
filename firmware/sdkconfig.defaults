@@ -12,3 +12,9 @@ CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 # The ESP32-D0WD-V3 boards used here carry 4MB; without this the image header
 # claims 2MB and the bootloader logs a size-mismatch warning on every boot.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Debug bridge: accept frames from the host over the same USB-serial cable.
+# UART0 is shared with the console, so log output can interleave; frames arrive
+# on RX and logs leave on TX, so inbound frames are not corrupted by it.
+CONFIG_FRAME_UART_ENABLE=y
+CONFIG_FRAME_UART_NUM=0
