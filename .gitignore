@@ -34,3 +34,8 @@ preview/
 Thumbs.db
 .vscode/
 .idea/
+
+# Private working material — NOT for publication.
+# Full implementation detail, the research edge, and how the open problems were
+# actually solved. Kept out of the public repo deliberately; see private/README.
+private/
