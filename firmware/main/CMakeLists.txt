@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "max7219.c"
         "framebuffer.c"
+        "canvas.c"
         "frame_rx.c"
         "font5x7.c"
         "text5x7.c"
