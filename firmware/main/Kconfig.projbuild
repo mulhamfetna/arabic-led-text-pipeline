@@ -16,6 +16,8 @@ menu "Arabic LED text pipeline"
             bool "WS2812B addressable RGB strip"
         config DISPLAY_P10
             bool "P10 DMD panel (UNTESTED)"
+        config DISPLAY_HC595
+            bool "74HC595 shift-register matrix (UNTESTED)"
     endchoice
 
     menu "MAX7219 wiring"
@@ -200,6 +202,65 @@ menu "Arabic LED text pipeline"
                 Many P10 panels drive their LEDs low-side, so a zero bit lights
                 the pixel. If the image comes out as a photographic negative,
                 flip this.
+
+    endmenu
+
+    menu "74HC595 matrix (UNTESTED)"
+        depends on DISPLAY_HC595
+
+        config HC595_PIN_DATA
+            int "DS / SER (data) GPIO"
+            default 13
+        config HC595_PIN_CLK
+            int "SH_CP (shift clock) GPIO"
+            default 14
+        config HC595_PIN_LATCH
+            int "ST_CP (latch) GPIO"
+            default 27
+        config HC595_PIN_OE
+            int "OE (output enable) GPIO"
+            default 33
+            help
+                Active low. Driven by LEDC so brightness is a duty cycle.
+
+        config HC595_COL_REGS
+            int "Column registers"
+            range 1 16
+            default 1
+            help
+                Panel width is COL_REGS * 8 pixels.
+
+                Scaling horizontally is free: every column in a row lights at
+                the same instant, so a wider panel is no dimmer.
+
+        config HC595_ROW_REGS
+            int "Row registers"
+            range 1 8
+            default 1
+            help
+                Panel height is ROW_REGS * 8 pixels.
+
+                Scaling vertically COSTS BRIGHTNESS. Only one row is lit at a
+                time, so each LED is on 1/height of the time: 8 rows gives 1/8,
+                32 rows gives 1/32 - a quarter as bright. This is physics, not
+                a firmware limit.
+
+                The row outputs MUST drive a ULN2803 or equivalent. A 74HC595
+                pin is rated 35mA and the package 70mA; a row of eight lit LEDs
+                at 20mA each draws 160mA and will damage the chip.
+
+        config HC595_BRIGHTNESS
+            int "Brightness (0-255)"
+            range 0 255
+            default 128
+
+        config HC595_REFRESH_HZ
+            int "Whole-panel refresh rate (Hz)"
+            range 50 400
+            default 100
+            help
+                Below about 50Hz the scan becomes visible as flicker. Higher
+                costs CPU, since every row is a separate SPI transfer.
 
     endmenu
 
