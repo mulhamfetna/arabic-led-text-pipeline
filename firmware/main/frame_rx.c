@@ -73,13 +73,15 @@ static void rx_task(void *arg)
             continue;
         }
 
-        uint8_t hdr[2];
+        uint8_t hdr[4];   /* w_bytes, h_rows, flags, speed */
         if (!read_exact(ctx->uart_num, hdr, sizeof(hdr), byte_timeout)) {
             ESP_LOGW(TAG, "header timeout");
             continue;
         }
         const uint8_t w_bytes = hdr[0];
         const uint8_t h_rows  = hdr[1];
+        const uint8_t flags   = hdr[2];
+        const uint8_t speed   = hdr[3];
         const size_t  len     = (size_t)w_bytes * h_rows;
 
         if (len == 0 || len > CONFIG_FRAME_MAX_PAYLOAD) {
@@ -116,7 +118,13 @@ static void rx_task(void *arg)
             continue;
         }
 
-        ctx->cb(ctx->payload, w_bytes, h_rows, ctx->user);
+        const frame_meta_t meta = {
+            .w_bytes  = w_bytes,
+            .h_rows   = h_rows,
+            .scroll   = (flags & FRAME_FLAG_SCROLL) != 0,
+            .speed_ms = speed ? speed : 60,
+        };
+        ctx->cb(ctx->payload, &meta, ctx->user);
     }
 }
 

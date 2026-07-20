@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <stdio.h>
+#include <string.h>
 
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "sdkconfig.h"
 
 #include "frame_rx.h"
@@ -21,7 +23,17 @@
 static const char *TAG = "main";
 
 static max7219_dev_t *s_panel;
-static framebuffer_t  s_fb;
+static framebuffer_t  s_fb;        /* exactly panel-sized: what gets rendered */
+
+/*
+ * Submitted content, which may be WIDER than the panel. The host sends the
+ * whole rendered phrase once and the firmware windows across it, rather than
+ * streaming a frame per animation step over the link.
+ */
+static framebuffer_t  s_content;
+static SemaphoreHandle_t s_content_lock;
+static volatile bool     s_scroll;
+static volatile uint16_t s_speed_ms = 60;
 
 #if CONFIG_MAX7219_ORIENTATION < 0
 #  define MAPPING_UNKNOWN 1
@@ -106,19 +118,97 @@ static void scroll_selftest(const char *msg)
 }
 #endif
 
-static void on_frame(const uint8_t *payload, uint8_t w_bytes, uint8_t h_rows, void *user)
+/*
+ * Copies the submitted frame into the content buffer. Content may be wider
+ * than the panel; the scroll task is what maps it onto the LEDs.
+ */
+static void on_frame(const uint8_t *payload, const frame_meta_t *meta, void *user)
 {
     (void)user;
-    const size_t len = (size_t)w_bytes * h_rows;
+    const uint16_t px_w = (uint16_t)meta->w_bytes * 8;
+    const size_t   len  = (size_t)meta->w_bytes * meta->h_rows;
 
-    if (!fb_load_packed(&s_fb, payload, len)) {
-        ESP_LOGW(TAG, "frame %ux%u (%u bytes) does not match panel buffer of %u",
-                 w_bytes * 8, h_rows, (unsigned)len, (unsigned)s_fb.size);
+    if (meta->h_rows != s_fb.height) {
+        ESP_LOGW(TAG, "frame is %u rows, panel is %u - dropping",
+                 meta->h_rows, s_fb.height);
         return;
     }
+
+    xSemaphoreTake(s_content_lock, portMAX_DELAY);
+
+    if (s_content.width != px_w) {
+        fb_free(&s_content);
+        if (!fb_init(&s_content, px_w, meta->h_rows)) {
+            ESP_LOGE(TAG, "content buffer alloc failed for %upx", px_w);
+            xSemaphoreGive(s_content_lock);
+            return;
+        }
+    }
+    memcpy(s_content.data, payload, len);
+
+    s_scroll   = meta->scroll && (px_w > s_fb.width);
+    s_speed_ms = meta->speed_ms;
     s_got_frame = true;
+
+    xSemaphoreGive(s_content_lock);
+
+    ESP_LOGI(TAG, "frame %ux%u, mode=%s%s", px_w, meta->h_rows,
+             s_scroll ? "scroll" : "static",
+             (meta->scroll && !s_scroll) ? " (fits panel, not scrolling)" : "");
+}
+
+/*
+ * Blits a window of the content onto the panel and pushes it.
+ * `offset` is in pixels from the left of the content.
+ */
+static void blit_window(int offset)
+{
+    fb_clear(&s_fb);
+    for (int y = 0; y < s_fb.height; y++) {
+        for (int x = 0; x < s_fb.width; x++) {
+            if (fb_get_pixel(&s_content, offset + x, y)) {
+                fb_set_pixel(&s_fb, x, y, true);
+            }
+        }
+    }
     max7219_render(s_panel, &s_fb);
-    ESP_LOGI(TAG, "rendered frame %ux%u", w_bytes * 8, h_rows);
+}
+
+static void display_task(void *arg)
+{
+    (void)arg;
+    int offset = 0;
+
+    for (;;) {
+        xSemaphoreTake(s_content_lock, portMAX_DELAY);
+
+        if (s_content.data == NULL) {
+            xSemaphoreGive(s_content_lock);
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        if (!s_scroll) {
+            blit_window(0);
+            xSemaphoreGive(s_content_lock);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
+        /*
+         * Scroll right-to-left, running the text fully off the left edge and
+         * back in from the right. The panel-width gap keeps the end of the
+         * phrase from colliding with its own beginning, which otherwise reads
+         * as one run-on string.
+         */
+        const int span = s_content.width + s_fb.width;
+        blit_window(offset);
+        offset = (offset + 1) % span;
+
+        const uint16_t delay = s_speed_ms;
+        xSemaphoreGive(s_content_lock);
+        vTaskDelay(pdMS_TO_TICKS(delay));
+    }
 }
 
 void app_main(void)
@@ -151,6 +241,9 @@ void app_main(void)
      * the bring-up pattern is still running, and the first frame it sends is
      * what stops the pattern.
      */
+    s_content_lock = xSemaphoreCreateMutex();
+    xTaskCreate(display_task, "display", 4096, NULL, 4, NULL);
+
     ESP_ERROR_CHECK(wifi_ap_start(CONFIG_AP_SSID, CONFIG_AP_PASSWORD));
     ESP_ERROR_CHECK(http_ui_start(max7219_width(s_panel), max7219_height(s_panel),
                                   on_frame, NULL));
