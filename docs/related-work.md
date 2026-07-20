@@ -1,8 +1,21 @@
 # Related work and prior art
 
-*Compiled 2026-07-19 from a multi-source survey with adversarial verification. Every claim below
-survived a 3-vote refutation pass; claims that failed are listed at the end so they are not
-accidentally revived.*
+*Compiled 2026-07-19 from a multi-source survey with adversarial verification, then spot-checked
+against primary sources on 2026-07-20.*
+
+**Verification status.** The load-bearing claims — the ones the project's positioning actually
+rests on — were re-checked by hand against the original source, not taken on the survey's word:
+
+| Claim | Primary source | Result |
+|---|---|---|
+| LVGL implements Arabic shaping | `lv_text_ap.c` on GitHub | ✅ **Verified** — every named identifier exists |
+| u8g2 maintainer declined shaping | GitHub API, issues #529/#640/#1995 | ✅ **Verified verbatim** |
+| ESPEasy Arabic font can't render Arabic text | `P104.rst` source | ✅ **Verified verbatim** |
+| Memory footprint blocked shaping in u8g2 | GitHub API, issue #529 | ⚠️ **Survey was WRONG** — see §3 |
+
+That last row matters: the automated pass refuted the memory-footprint claim 0–3, but the primary
+source states it plainly. **A 3-vote adversarial check produced a false negative.** Anything below
+not marked verified above still carries that risk.
 
 **Headline finding: the project's original framing was too strong and has been narrowed.**
 "No good open-source Arabic solution exists" is false as stated. Real Arabic shaping and bidi
@@ -83,6 +96,23 @@ Reaffirmed in [#640](https://github.com/olikraus/u8g2/issues/640) ("this will be
 u8g2 project") and [#1995](https://github.com/olikraus/u8g2/issues/1995) (2022, "You need to pass
 a proper UTF-8 code sequence"). Users have filed disconnected-letter reports continuously —
 #640, #1219, #2360, #2416, #2527, #2703 — **2018 through 2024, still unresolved.**
+
+### Why u8g2 declined — verified directly, and it supports our architecture
+
+The automated survey refuted this, wrongly. The primary source ([#529](https://github.com/olikraus/u8g2/issues/529),
+fetched via the GitHub API on 2026-07-20) says it outright:
+
+> "I tried already some time back. The kerning tables will be VERY huge. That is why I added
+> `drawExtUTF8`. […] There is one more problem: From where shell I get the kerning information.
+> I do not have the kerning information and I am not able to extract the same from .ttf files."
+
+So the refusal was **resource-driven and tooling-driven**, not arbitrary: shaping/kerning tables
+were too large for the target, and the maintainer had no path from `.ttf` to that data.
+
+This is direct support for the host-shapes-then-ships-pixels split. The most experienced
+maintainer in this space rejected on-MCU shaping for exactly the reasons the architecture
+sidesteps — and note that issue #35 still needs to *measure* this rather than inherit it as
+received wisdom.
 
 Notably, u8g2 *did* gain `u8g2_DrawHB()` ([#2656](https://github.com/olikraus/u8g2/issues/2656),
 June 2025) — but shaping runs in the **desktop `hb-shape` binary**, baked into a static PROGMEM
@@ -191,7 +221,7 @@ Each failed a 3-vote adversarial check. Recorded so nobody re-adds them from mem
 | Huidu HD2018 exposes a per-text-area "Text direction [Right→Left]" checkbox | 0–3 |
 | HD-W6X text rendering is driven entirely by vendor Windows software, with no on-device pipeline | 0–3 |
 | LedshowTW's CHARSET selector implies Windows GDI rasterization | 0–3 |
-| Memory footprint was the stated blocker for shaping tables in u8g2 | 0–3 |
+| ~~Memory footprint was the stated blocker for shaping tables in u8g2~~ **RETRACTED — this was true; the refutation was wrong. See §3.** | 0–3 |
 | MD_Parola's UTF-8 example proves its pipeline is fundamentally 8-bit-per-glyph | 0–3 |
 | `arduino-persian-reshaper` targets only OLED/LCD, not LED matrices | 0–3 |
 | The LedshowTW manual contains no mention of RTL/bidi anywhere | 1–2 |
