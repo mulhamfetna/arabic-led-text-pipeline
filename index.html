@@ -9,25 +9,29 @@
 <meta property="og:description" content="Correct Arabic on LED dot-matrix panels, from a phone, with no app.">
 <style>
 /* ─────────────────────────────────────────────────────────────────────────
-   A light page with one dark, emissive element.
+   Same palette and typography as the slide deck.
 
-   The reflex for an LED project is a dark page with a red accent — which
-   would make the panel just another dark rectangle. Inverted, the panel is
-   the only lit thing on the page, which is how a sign actually looks in
-   daylight. The unlit LED is dark maroon rather than grey: a dead red diode
-   still shows its die colour, and grey is what makes fake LED graphics read
-   as fake.
+   Taken from the hardware: 625nm orange-red for a lit LED, dark maroon for an
+   unlit one. That second colour is the detail that matters — a dead red diode
+   still shows its die colour, and substituting grey is what makes rendered LED
+   graphics look fake.
+
+   Display type is monospace because the vernacular of this material is
+   datasheets and register maps, and Arabic gets a naskh serif because it is
+   the subject rather than decoration.
    ───────────────────────────────────────────────────────────────────────── */
 :root{
-  --paper:   #f6f7f8;
-  --card:    #ffffff;
-  --ink:     #14181c;
-  --muted:   #6b7580;
-  --rule:    #e3e6e9;
-  --panel:   #0b0d10;   /* unlit panel body   */
-  --lit:     #ff3b21;   /* 625nm red          */
-  --unlit:   #2a1210;   /* dark die, not grey */
-  --link:    #b3301c;
+  --pcb:     #0a0c0f;   /* page: unlit panel                  */
+  --surface: #12161b;   /* cards: panel body, slightly lifted */
+  --rule:    #222a33;   /* silkscreen hairline                */
+  --ink:     #e9e6e2;   /* silkscreen white, warm             */
+  --dim:     #b6bcc3;
+  --muted:   #79848f;   /* component grey                     */
+  --lit:     #ff2d20;   /* 625nm red                          */
+  --lit-dim: #a01a12;
+  --unlit:   #3a1210;   /* dark die, not grey                 */
+  --cool:    #6ea8fe;   /* reserved: code only                */
+  --link:    #ff6a58;
 
   --mono: ui-monospace, "DejaVu Sans Mono", "SF Mono", Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -37,23 +41,23 @@
 html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
 body{
-  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  background:var(--pcb); color:var(--ink); font-family:var(--sans);
   line-height:1.6; -webkit-font-smoothing:antialiased;
 }
 .wrap{max-width:1000px; margin-inline:auto; padding-inline:clamp(20px,5vw,40px)}
 a{color:var(--link)}
 
 /* ── masthead ───────────────────────────────────────────────────────────── */
-header{border-bottom:1px solid var(--rule); background:var(--card)}
+header{border-bottom:1px solid var(--rule); background:var(--surface)}
 .masthead{display:flex; align-items:center; gap:16px; padding:16px 0; flex-wrap:wrap}
 .mark{font-family:var(--mono); font-weight:700; font-size:14px; letter-spacing:-.01em}
 .badges{margin-inline-start:auto; display:flex; gap:8px; flex-wrap:wrap}
 .badge{
   font-family:var(--mono); font-size:11px; letter-spacing:.04em;
   border:1px solid var(--rule); border-radius:999px; padding:4px 11px;
-  color:var(--muted); text-decoration:none; background:var(--paper);
+  color:var(--muted); text-decoration:none; background:var(--pcb);
 }
-.badge:hover{border-color:var(--ink); color:var(--ink)}
+.badge:hover{border-color:var(--lit); color:var(--lit)}
 
 /* ── hero ───────────────────────────────────────────────────────────────── */
 .hero{padding:clamp(44px,7vw,84px) 0 clamp(28px,4vw,44px)}
@@ -66,10 +70,10 @@ header{border-bottom:1px solid var(--rule); background:var(--card)}
   line-height:1.25; letter-spacing:0; margin-bottom:6px;
 }
 .hero h1{
-  font-family:var(--sans); font-size:clamp(19px,2.4vw,27px); font-weight:600;
+  font-family:var(--mono); font-weight:700; font-size:clamp(19px,2.4vw,27px); font-weight:600;
   line-height:1.35; max-width:22ch; margin:22px 0 14px; letter-spacing:-.015em;
 }
-.hero p{font-size:clamp(15px,1.6vw,18px); color:#3d4650; max-width:56ch}
+.hero p{font-size:clamp(15px,1.6vw,18px); color:var(--dim); max-width:56ch}
 
 /* the signature: the same words, as the panel would show them */
 .asPixels{margin:10px 0 0; overflow-x:auto; padding-bottom:4px; direction:rtl}
@@ -82,7 +86,7 @@ header{border-bottom:1px solid var(--rule); background:var(--card)}
 
 /* ── the live panel ─────────────────────────────────────────────────────── */
 .demo{
-  background:var(--card); border:1px solid var(--rule); border-radius:14px;
+  background:var(--surface); border:1px solid var(--rule); border-radius:14px;
   padding:clamp(18px,2.6vw,26px); margin:clamp(26px,4vw,40px) 0;
 }
 .demo-head{display:flex; align-items:baseline; gap:12px; margin-bottom:16px; flex-wrap:wrap}
@@ -100,9 +104,9 @@ label{display:block; font-family:var(--mono); font-size:11px; letter-spacing:.06
 input[type=text]{
   width:100%; font-family:var(--ar); font-size:21px; direction:rtl;
   padding:11px 13px; border:1px solid var(--rule); border-radius:9px;
-  background:var(--paper); color:var(--ink);
+  background:#0d1116; color:var(--ink);
 }
-input[type=range]{width:100%; accent-color:var(--link)}
+input[type=range]{width:100%; accent-color:var(--lit)}
 .val{float:right; font-family:var(--mono); color:var(--ink)}
 .readout{
   font-family:var(--mono); font-size:11.5px; color:var(--muted);
@@ -115,12 +119,12 @@ section{padding:clamp(40px,6vw,68px) 0; border-top:1px solid var(--rule)}
   font-family:var(--mono); font-size:12px; letter-spacing:.13em;
   text-transform:uppercase; color:var(--muted); margin-bottom:12px;
 }
-h2.title{font-size:clamp(22px,3.2vw,32px); font-weight:650; letter-spacing:-.02em; margin-bottom:16px}
-section p{max-width:62ch; margin-bottom:14px; color:#39424c}
+h2.title{font-family:var(--mono); font-size:clamp(21px,3vw,30px); font-weight:700; letter-spacing:-.02em; margin-bottom:16px}
+section p{max-width:62ch; margin-bottom:14px; color:var(--dim)}
 
 /* the four contextual forms — the argument, made visible */
 .forms{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin:26px 0}
-.form{background:var(--card); border:1px solid var(--rule); border-radius:11px; padding:18px 14px; text-align:center}
+.form{background:var(--surface); border:1px solid var(--rule); border-radius:11px; padding:18px 14px; text-align:center}
 .form .glyph{font-family:var(--ar); font-size:44px; line-height:1.35; direction:rtl}
 .form .name{font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
             text-transform:uppercase; color:var(--muted); margin-top:6px}
@@ -128,12 +132,12 @@ section p{max-width:62ch; margin-bottom:14px; color:#39424c}
 /* pipeline stages — numbered because the order genuinely carries meaning */
 .stages{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
         border-radius:11px; overflow:hidden; margin-top:24px}
-.stage{background:var(--card); padding:16px 18px; display:grid;
+.stage{background:var(--surface); padding:16px 18px; display:grid;
        grid-template-columns:auto 1fr; gap:16px; align-items:baseline}
 .stage b{font-family:var(--mono); font-size:12px; color:var(--lit); font-weight:400}
 .stage h3{font-size:15px; font-weight:600; margin-bottom:3px}
 .stage p{font-size:14px; color:var(--muted); margin:0; max-width:none}
-.stage.mcu{background:#fbfbfc}
+.stage.mcu{background:#0e1216}
 .stage.mcu b{color:var(--muted)}
 
 table{border-collapse:collapse; width:100%; margin-top:20px; font-size:14.5px}
@@ -141,7 +145,7 @@ th,td{border-bottom:1px solid var(--rule); padding:11px 12px; text-align:left; v
 th{font-family:var(--mono); font-size:11px; letter-spacing:.07em; text-transform:uppercase;
    color:var(--muted); font-weight:400}
 td:first-child{font-weight:550}
-.ok{color:#1a7f4b} .no{color:var(--muted)}
+.ok{color:#4ec97e} .no{color:var(--muted)}
 
 pre{
   background:var(--panel); color:#c8d0d8; border-radius:10px; padding:15px 17px;
@@ -151,20 +155,20 @@ pre .c{color:#7d8894}
 pre .h{color:var(--lit)}
 
 .cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:22px}
-.card{background:var(--card); border:1px solid var(--rule); border-radius:11px; padding:18px 20px}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:11px; padding:18px 20px}
 .card h3{font-size:15px; margin-bottom:6px}
 .card p{font-size:14px; color:var(--muted); margin:0}
 .card a{font-family:var(--mono); font-size:12.5px}
 
 .note{
   border-inline-start:3px solid var(--lit); padding:2px 0 2px 16px;
-  margin:22px 0; color:#39424c; max-width:62ch;
+  margin:22px 0; color:var(--dim); max-width:62ch;
 }
 
-footer{border-top:1px solid var(--rule); background:var(--card); padding:34px 0 46px}
+footer{border-top:1px solid var(--rule); background:var(--surface); padding:34px 0 46px}
 footer p{font-size:13.5px; color:var(--muted); max-width:none}
 footer a{font-family:var(--mono); font-size:13px}
-:focus-visible{outline:2px solid var(--link); outline-offset:3px}
+:focus-visible{outline:2px solid var(--lit); outline-offset:3px}
 </style>
 </head>
 <body>
@@ -425,11 +429,16 @@ function drawPanel(cv, bits, W, H, dot, gap) {
   cv.height = H * (dot + gap);
   const g = cv.getContext("2d");
   g.clearRect(0, 0, cv.width, cv.height);
+  g.shadowBlur = 0;
   const r = dot / 2;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const on = bits[y * W + x];
-      g.fillStyle = on ? "#ff3b21" : "#2a1210";
+      g.fillStyle = on ? "#ff2d20" : "#3a1210";
+      /* A lit LED bleeds a little; an unlit one does not. Skipping the
+         shadow when dark keeps the canvas cheap on long strings. */
+      g.shadowBlur  = on ? r * 1.6 : 0;
+      g.shadowColor = on ? "rgba(255,45,32,.55)" : "transparent";
       g.beginPath();
       g.arc(x * (dot + gap) + r, y * (dot + gap) + r, r * 0.86, 0, 6.2832);
       g.fill();
