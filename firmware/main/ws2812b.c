@@ -3,6 +3,15 @@
  * Copyright (C) 2026  Mulham Fetna
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+
+/*
+ * Compiled only when this driver is selected. The guard sits above the
+ * includes so an unselected driver costs nothing - not a header parse, not
+ * a component dependency, and not a peripheral pulled in for hardware that
+ * is not attached.
+ */
+#include "sdkconfig.h"
+#ifdef CONFIG_DISPLAY_WS2812B
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,12 +21,6 @@
 
 #include "display.h"
 
-/*
- * Compiled only when this driver is selected. Its Kconfig symbols depend on
- * DISPLAY_WS2812B, so they do not exist otherwise - and linking it anyway
- * would drag the RMT peripheral in for hardware that is not attached.
- */
-#ifdef CONFIG_DISPLAY_WS2812B
 
 static const char *TAG = "ws2812b";
 

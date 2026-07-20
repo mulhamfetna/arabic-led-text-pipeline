@@ -6,6 +6,7 @@ idf_component_register(
         "canvas.c"
         "display.c"
         "ws2812b.c"
+        "p10.c"
         "frame_rx.c"
         "font5x7.c"
         "text5x7.c"
@@ -18,4 +19,5 @@ idf_component_register(
         esp_wifi
         esp_http_server
         nvs_flash
+        esp_timer
 )

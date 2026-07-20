@@ -152,6 +152,57 @@ menu "Arabic LED text pipeline"
 
     endmenu
 
+    menu "P10 DMD panel (UNTESTED)"
+        depends on DISPLAY_P10
+
+        config P10_PIN_R
+            int "R (data) GPIO"
+            default 13
+        config P10_PIN_CLK
+            int "CLK GPIO"
+            default 14
+        config P10_PIN_LAT
+            int "LAT / STB GPIO"
+            default 27
+        config P10_PIN_A
+            int "A (row select) GPIO"
+            default 26
+        config P10_PIN_B
+            int "B (row select) GPIO"
+            default 25
+        config P10_PIN_OE
+            int "OE (output enable) GPIO"
+            default 33
+            help
+                Driven by LEDC so brightness is a duty cycle. Active LOW.
+
+        config P10_PANELS_X
+            int "Panels across"
+            range 1 8
+            default 1
+            help
+                Each P10 panel is 32x16 pixels.
+
+        config P10_PANELS_Y
+            int "Panels down"
+            range 1 4
+            default 1
+
+        config P10_BRIGHTNESS
+            int "Brightness (0-255)"
+            range 0 255
+            default 128
+
+        config P10_INVERT
+            bool "Invert data (0 lights the LED)"
+            default y
+            help
+                Many P10 panels drive their LEDs low-side, so a zero bit lights
+                the pixel. If the image comes out as a photographic negative,
+                flip this.
+
+    endmenu
+
     menu "Hardware self-test (Latin reference)"
 
         config SELFTEST_ENABLE
