@@ -28,8 +28,14 @@ typedef struct {
 static esp_err_t index_get(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, (const char *)index_html_start,
-                           index_html_end - index_html_start - 1);
+    /*
+     * EMBED_FILES embeds raw bytes with no null terminator - unlike
+     * EMBED_TXTFILES - so the length is end-start exactly. Subtracting one
+     * here silently truncated the last byte of the page.
+     */
+    const size_t len = index_html_end - index_html_start;
+    ESP_LOGI(TAG, "GET / -> serving %u bytes", (unsigned)len);
+    return httpd_resp_send(req, (const char *)index_html_start, len);
 }
 
 /* Lets the page size its canvas to the real panel instead of guessing. */
@@ -116,6 +122,7 @@ static esp_err_t frame_post(httpd_req_t *req)
  */
 static esp_err_t portal_redirect(httpd_req_t *req)
 {
+    ESP_LOGI(TAG, "probe %s -> 302 to portal", req->uri);
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
     /* Stops the phone caching "this network is fine" from an earlier join. */

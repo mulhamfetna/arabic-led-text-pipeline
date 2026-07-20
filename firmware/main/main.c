@@ -44,6 +44,7 @@ static volatile bool s_got_frame;
  * Report the four observed physical positions and the orientation index falls
  * straight out of them.
  */
+#ifdef MAPPING_UNKNOWN
 static void bringup_pattern(void)
 {
     const int w = max7219_width(s_panel);
@@ -77,6 +78,7 @@ static void bringup_pattern(void)
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
+#endif
 
 #if defined(CONFIG_SELFTEST_ENABLE) && !defined(MAPPING_UNKNOWN)
 /*
