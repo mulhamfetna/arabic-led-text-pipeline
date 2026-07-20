@@ -17,7 +17,8 @@
  *
  *   0x01 | w_bytes | h_rows | flags | speed | payload[w_bytes*h_rows] | crc32[4]
  *
- * flags bit0 = scroll. speed is milliseconds per 1px scroll step.
+ * flags bit0 = scroll, bit1 = scroll rightward (Arabic reading order).
+ * speed is milliseconds per 1px scroll step.
  *
  * flags/speed were added so the serial path can express everything the HTTP
  * path can - a debug transport that cannot reproduce a display mode is not a
@@ -34,7 +35,8 @@
 /* Computed over `len` bytes; seed with 0 for a fresh CRC. */
 uint32_t frame_crc32(uint32_t seed, const uint8_t *data, size_t len);
 
-#define FRAME_FLAG_SCROLL 0x01
+#define FRAME_FLAG_SCROLL    0x01
+#define FRAME_FLAG_RIGHTWARD 0x02
 
 /* Called from the receive task when a frame arrives with a valid CRC. */
 typedef void (*frame_cb_t)(const uint8_t *payload, const frame_meta_t *meta,

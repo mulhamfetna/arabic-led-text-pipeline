@@ -22,6 +22,15 @@ typedef struct {
     uint8_t  w_bytes;       /* frame width in bytes; pixel width is w_bytes*8 */
     uint8_t  h_rows;
     bool     scroll;
+    /*
+     * Which way the text appears to travel.
+     *
+     * Latin scrolls leftward: the string's left end is its first character, so
+     * it must enter the panel first. Arabic reads right-to-left, so its first
+     * character sits at the RIGHT end of the visual string - it has to travel
+     * rightward to be revealed in reading order. Same mechanism, opposite sign.
+     */
+    bool     rightward;
     uint16_t speed_ms;      /* delay per 1px scroll step */
 } frame_meta_t;
 

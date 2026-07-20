@@ -62,7 +62,7 @@
 <div class="card">
   <label>المعاينة <span class="val" id="fitnote"></span></label>
   <div class="screen"><canvas id="preview"></canvas></div>
-  <div class="hint">هذه المعاينة مطابقة تماماً لما سيظهر على اللوحة، بكسل ببكسل.</div>
+  <div class="hint" id="prevhint">هذه المعاينة مطابقة تماماً لما سيظهر على اللوحة، بكسل ببكسل.</div>
 </div>
 
 <div class="card">
@@ -70,6 +70,14 @@
   <div class="modes">
     <label class="mode"><input type="radio" name="mode" value="static" checked> ثابت</label>
     <label class="mode"><input type="radio" name="mode" value="scroll"> متحرك</label>
+  </div>
+  <div id="dirwrap" style="display:none; margin-top:12px">
+    <label>اتجاه الحركة</label>
+    <div class="modes">
+      <label class="mode"><input type="radio" name="dir" value="rtl" checked> ← يمين (عربي)</label>
+      <label class="mode"><input type="radio" name="dir" value="ltr"> يسار (لاتيني) →</label>
+    </div>
+    <div class="hint">النص العربي يبدأ من اليمين، لذا يتحرك نحو اليمين ليظهر بترتيب القراءة.</div>
   </div>
   <div id="speedwrap" style="display:none; margin-top:12px">
     <label>سرعة الحركة <span class="val"><span id="speedval">60</span> ms</span></label>
@@ -121,6 +129,8 @@
 
   let packed = null;
   let curW = 32;          // width of the frame actually produced
+  let animTimer = null;   // preview scroll animation
+  let animOffset = 0;
 
   /*
    * Renders the text and returns the packed 1-bit payload.
@@ -190,17 +200,26 @@
     return out;
   }
 
-  function draw(bits) {
+  /*
+   * Draws `cols` panel columns starting at `offset` into the content.
+   * Static mode passes the whole frame; scroll mode passes a panel-sized
+   * window and steps `offset`, which is what makes the preview show the real
+   * speed rather than a still image the operator has to imagine moving.
+   */
+  function draw(bits, cols, offset) {
     const stride = Math.ceil(curW / 8);
-    const dot = Math.max(4, Math.min(14, Math.floor((window.innerWidth - 60) / W)));
-    preview.width  = curW * dot;
+    const dot = Math.max(4, Math.min(14, Math.floor((window.innerWidth - 60) / cols)));
+    preview.width  = cols * dot;
     preview.height = H * dot;
     pctx.fillStyle = "#000";
     pctx.fillRect(0, 0, preview.width, preview.height);
 
     for (let y = 0; y < H; y++) {
-      for (let x = 0; x < curW; x++) {
-        const on = (bits[y * stride + (x >> 3)] >> (7 - (x & 7))) & 1;
+      for (let x = 0; x < cols; x++) {
+        const sx = offset + x;
+        const on = (sx >= 0 && sx < curW)
+          ? (bits[y * stride + (sx >> 3)] >> (7 - (sx & 7))) & 1
+          : 0;
         pctx.fillStyle = on ? "#ff3b30" : "#1a1a1a";
         pctx.beginPath();
         pctx.arc(x*dot + dot/2, y*dot + dot/2, dot*0.38, 0, 6.284);
@@ -209,13 +228,43 @@
     }
   }
 
+  function stopAnim() {
+    if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  }
+
+  /*
+   * Mirrors the firmware's display task exactly: same span, same blank gap,
+   * same sign convention. If the preview and the panel ever disagree, one of
+   * these two loops is wrong - and they are deliberately easy to compare.
+   */
+  function startAnim() {
+    stopAnim();
+    const span = curW + W;
+    const rightward = document.querySelector('input[name=dir]:checked').value === "rtl";
+    animOffset = 0;
+    animTimer = setInterval(() => {
+      draw(packed, W, animOffset - W);
+      animOffset = rightward ? (animOffset - 1 + span) % span
+                             : (animOffset + 1) % span;
+    }, +speed.value);
+  }
+
   function update() {
     $("sizeval").textContent  = size.value;
     $("thval").textContent    = th.value;
     $("speedval").textContent = speed.value;
-    $("speedwrap").style.display = mode() === "scroll" ? "" : "none";
+    const scrolling = mode() === "scroll";
+    $("speedwrap").style.display = scrolling ? "" : "none";
+    $("dirwrap").style.display   = scrolling ? "" : "none";
     packed = render();
-    draw(packed);
+    if (mode() === "scroll") {
+      $("prevhint").textContent = "المعاينة تعمل بنفس السرعة الحقيقية للوحة.";
+      startAnim();
+    } else {
+      stopAnim();
+      $("prevhint").textContent = "هذه المعاينة مطابقة تماماً لما سيظهر على اللوحة، بكسل ببكسل.";
+      draw(packed, curW, 0);
+    }
   }
 
   async function send() {
@@ -226,7 +275,8 @@
     try {
       const stride = Math.ceil(curW / 8);
       const r = await fetch(
-        `/frame?w=${stride}&h=${H}&mode=${mode()}&speed=${speed.value}`, {
+        `/frame?w=${stride}&h=${H}&mode=${mode()}&speed=${speed.value}`
+        + `&dir=${document.querySelector('input[name=dir]:checked').value}`, {
         method: "POST",
         headers: {"Content-Type": "application/octet-stream"},
         body: packed,
@@ -245,11 +295,11 @@
 
   ["input", "change"].forEach(ev => {
     [txt, size, th, font, speed].forEach(el => el.addEventListener(ev, update));
-    document.querySelectorAll('input[name=mode]')
+    document.querySelectorAll('input[name=mode], input[name=dir]')
             .forEach(el => el.addEventListener(ev, update));
   });
   $("send").addEventListener("click", send);
-  window.addEventListener("resize", () => packed && draw(packed));
+  window.addEventListener("resize", update);
 
   fetch("/panel")
     .then(r => r.json())
