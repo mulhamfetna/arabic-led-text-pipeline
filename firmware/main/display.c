@@ -15,6 +15,8 @@
 extern const display_driver_t ws2812b_display;
 #elif defined(CONFIG_DISPLAY_P10)
 extern const display_driver_t p10_display;
+#elif defined(CONFIG_DISPLAY_HC595)
+extern const display_driver_t hc595_display;
 #else
 extern const display_driver_t max7219_display;
 #endif
@@ -25,6 +27,8 @@ const display_driver_t *display_get(void)
     return &ws2812b_display;
 #elif defined(CONFIG_DISPLAY_P10)
     return &p10_display;
+#elif defined(CONFIG_DISPLAY_HC595)
+    return &hc595_display;
 #else
     return &max7219_display;
 #endif

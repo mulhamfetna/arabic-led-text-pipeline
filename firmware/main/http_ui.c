@@ -185,8 +185,17 @@ esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h, bool has_colour,
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable = true;
     cfg.max_uri_handlers = 16;
-    /* Phones open several probe connections at once while deciding. */
-    cfg.max_open_sockets = 7;
+    /*
+     * Phones open several connections at once while deciding whether a network
+     * is captive - an HTTP probe, an HTTPS probe, and the portal fetch, often
+     * overlapping. Every refused connection reads to the phone as a broken
+     * network rather than a portalled one.
+     *
+     * This must stay comfortably below CONFIG_LWIP_MAX_SOCKETS once the
+     * listener and the captive DNS socket are counted, or accept() fails with
+     * ENFILE and the refusals happen at exactly the wrong moment.
+     */
+    cfg.max_open_sockets = 10;
 
     httpd_handle_t server = NULL;
     esp_err_t err = httpd_start(&server, &cfg);

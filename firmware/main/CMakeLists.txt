@@ -7,6 +7,8 @@ idf_component_register(
         "display.c"
         "ws2812b.c"
         "p10.c"
+        "hc595.c"
+        "scan_matrix.c"
         "frame_rx.c"
         "font5x7.c"
         "text5x7.c"

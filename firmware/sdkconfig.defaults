@@ -24,3 +24,17 @@ CONFIG_FRAME_UART_NUM=0
 # index 5 = transpose + flipY. Derived from the four observed corners and
 # confirmed by simulation before flashing.
 CONFIG_MAX7219_ORIENTATION=5
+
+# Socket budget.
+#
+# The default lwIP pool is 10. The HTTP server asks for 7 clients plus a
+# listener, and the captive DNS holds a UDP socket - 9 of 10, with one spare.
+#
+# A phone validating a network opens several connections at once (HTTP probe,
+# HTTPS probe, the portal fetch), which exhausts the pool. accept() then fails
+# with ENFILE and the phone sees refused connections at exactly the moment it
+# is deciding whether this is a captive portal - so it concludes the network is
+# broken rather than portalled, and no sign-in banner appears.
+#
+# Observed directly as: httpd_accept_conn: error in accept (23)
+CONFIG_LWIP_MAX_SOCKETS=16
