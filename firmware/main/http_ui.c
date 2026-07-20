@@ -28,8 +28,14 @@ typedef struct {
 static esp_err_t index_get(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, (const char *)index_html_start,
-                           index_html_end - index_html_start - 1);
+    /*
+     * EMBED_FILES embeds raw bytes with no null terminator - unlike
+     * EMBED_TXTFILES - so the length is end-start exactly. Subtracting one
+     * here silently truncated the last byte of the page.
+     */
+    const size_t len = index_html_end - index_html_start;
+    ESP_LOGI(TAG, "GET / -> serving %u bytes", (unsigned)len);
+    return httpd_resp_send(req, (const char *)index_html_start, len);
 }
 
 /* Lets the page size its canvas to the real panel instead of guessing. */
@@ -54,17 +60,29 @@ static esp_err_t frame_post(httpd_req_t *req)
 {
     ui_ctx_t *ctx = req->user_ctx;
 
-    char query[64] = {0};
+    char query[96] = {0};
     unsigned w_bytes = 0, h_rows = 0;
+    frame_meta_t meta = { .speed_ms = 60 };
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char val[8];
+        char val[16];
         if (httpd_query_key_value(query, "w", val, sizeof(val)) == ESP_OK) {
             w_bytes = (unsigned)atoi(val);
         }
         if (httpd_query_key_value(query, "h", val, sizeof(val)) == ESP_OK) {
             h_rows = (unsigned)atoi(val);
         }
+        if (httpd_query_key_value(query, "mode", val, sizeof(val)) == ESP_OK) {
+            meta.scroll = (strcmp(val, "scroll") == 0);
+        }
+        if (httpd_query_key_value(query, "speed", val, sizeof(val)) == ESP_OK) {
+            int sp = atoi(val);
+            if (sp >= 10 && sp <= 500) {
+                meta.speed_ms = (uint16_t)sp;
+            }
+        }
     }
+    meta.w_bytes = (uint8_t)w_bytes;
+    meta.h_rows  = (uint8_t)h_rows;
 
     const size_t expected = (size_t)w_bytes * h_rows;
     if (expected == 0 || expected > CONFIG_FRAME_MAX_PAYLOAD) {
@@ -95,7 +113,7 @@ static esp_err_t frame_post(httpd_req_t *req)
         got += (size_t)n;
     }
 
-    ctx->cb(payload, (uint8_t)w_bytes, (uint8_t)h_rows, ctx->user);
+    ctx->cb(payload, &meta, ctx->user);
     free(payload);
 
     httpd_resp_set_type(req, "application/json");
@@ -116,6 +134,7 @@ static esp_err_t frame_post(httpd_req_t *req)
  */
 static esp_err_t portal_redirect(httpd_req_t *req)
 {
+    ESP_LOGI(TAG, "probe %s -> 302 to portal", req->uri);
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
     /* Stops the phone caching "this network is fine" from an earlier join. */

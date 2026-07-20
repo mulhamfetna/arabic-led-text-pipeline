@@ -40,6 +40,12 @@
   .status{font-size:12px; margin-top:10px; min-height:1.2em; color:var(--dim); text-align:center}
   .status.ok{color:#3fb950} .status.err{color:#f85149}
   .hint{font-size:11px; color:var(--dim); margin-top:8px; line-height:1.5}
+  .modes{display:flex; gap:10px}
+  .mode{flex:1; display:flex; align-items:center; justify-content:center; gap:7px;
+        background:#0d1117; border:1px solid var(--line); border-radius:8px;
+        padding:11px; font-size:15px; color:var(--ink); cursor:pointer; margin:0}
+  .mode:has(input:checked){border-color:var(--accent); background:#12233d}
+  .mode input{accent-color:var(--accent); margin:0}
 </style>
 </head>
 <body>
@@ -60,16 +66,27 @@
 </div>
 
 <div class="card">
-  <div class="row">
+  <label>العرض</label>
+  <div class="modes">
+    <label class="mode"><input type="radio" name="mode" value="static" checked> ثابت</label>
+    <label class="mode"><input type="radio" name="mode" value="scroll"> متحرك</label>
+  </div>
+  <div id="speedwrap" style="display:none; margin-top:12px">
+    <label>سرعة الحركة <span class="val"><span id="speedval">60</span> ms</span></label>
+    <input type="range" id="speed" min="10" max="200" value="60">
+  </div>
+
+  <div class="row" style="margin-top:14px">
     <div>
       <label>حجم الخط <span class="val" id="sizeval">8</span></label>
       <input type="range" id="size" min="5" max="16" value="8">
     </div>
     <div>
-      <label>حد التحويل <span class="val" id="thval">128</span></label>
+      <label>سماكة الخط <span class="val" id="thval">128</span></label>
       <input type="range" id="th" min="60" max="200" value="128">
     </div>
   </div>
+  <div class="hint">سماكة الخط تحدد متى تُعتبر النقطة الرمادية مضاءة: القيمة الأقل تعطي خطاً أعرض، والأعلى أرفع.</div>
   <label for="font" style="margin-top:12px">الخط</label>
   <select id="font">
     <option value="system-ui, sans-serif">النظام</option>
@@ -92,6 +109,8 @@
 
   const $ = id => document.getElementById(id);
   const txt = $("txt"), size = $("size"), th = $("th"), font = $("font");
+  const speed = $("speed");
+  const mode = () => document.querySelector('input[name=mode]:checked').value;
   const preview = $("preview"), status = $("status");
 
   const off  = document.createElement("canvas");   // supersampled
@@ -101,6 +120,7 @@
   const pctx = preview.getContext("2d");
 
   let packed = null;
+  let curW = 32;          // width of the frame actually produced
 
   /*
    * Renders the text and returns the packed 1-bit payload.
@@ -113,8 +133,23 @@
   function render() {
     const px  = +size.value;
     const cut = +th.value;
+    const scrolling = mode() === "scroll";
 
-    off.width = W * SS; off.height = H * SS;
+    /*
+     * Static mode renders into exactly the panel. Scroll mode renders the
+     * whole phrase at its natural width and sends it as ONE wide frame - the
+     * firmware windows across it, so animation costs no further traffic.
+     */
+    let outW = W;
+    if (scrolling) {
+      const probe = document.createElement("canvas").getContext("2d");
+      probe.font = `${px}px ${font.value}`;
+      // Round up to a whole byte: the wire format packs 8 pixels per byte.
+      outW = Math.max(W, Math.ceil((Math.ceil(probe.measureText(txt.value).width) + 2) / 8) * 8);
+    }
+    curW = outW;
+
+    off.width = outW * SS; off.height = H * SS;
     octx.fillStyle = "#000";
     octx.fillRect(0, 0, off.width, off.height);
     octx.fillStyle = "#fff";
@@ -124,24 +159,26 @@
     octx.textAlign = "right";
     octx.fillText(txt.value, off.width - SS, off.height / 2);
 
-    // Report overflow honestly rather than silently cropping.
     const measured = Math.ceil(octx.measureText(txt.value).width / SS);
-    $("fitnote").textContent = measured > W ? `النص أطول من اللوحة (${measured}px)` : "";
+    $("fitnote").textContent =
+      scrolling ? `${outW}px — يتحرك على اللوحة`
+      : measured > W ? `النص أطول من اللوحة (${measured}px) — اختر «متحرك»`
+      : "";
 
     // Downsample: the browser's image smoothing does the box filter for us,
     // which is what preserves stroke shape at 8px before thresholding.
-    flat.width = W; flat.height = H;
+    flat.width = outW; flat.height = H;
     fctx.imageSmoothingEnabled = true;
-    fctx.clearRect(0, 0, W, H);
-    fctx.drawImage(off, 0, 0, W, H);
+    fctx.clearRect(0, 0, outW, H);
+    fctx.drawImage(off, 0, 0, outW, H);
 
-    const px32 = fctx.getImageData(0, 0, W, H).data;
-    const stride = Math.ceil(W / 8);
+    const px32 = fctx.getImageData(0, 0, outW, H).data;
+    const stride = Math.ceil(outW / 8);
     const out = new Uint8Array(stride * H);
 
     for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const i = (y * W + x) * 4;
+      for (let x = 0; x < outW; x++) {
+        const i = (y * outW + x) * 4;
         // Rec. 601 luma, then threshold. Same cutoff semantics as the firmware.
         const lum = 0.299*px32[i] + 0.587*px32[i+1] + 0.114*px32[i+2];
         if (lum >= cut) {
@@ -154,15 +191,15 @@
   }
 
   function draw(bits) {
-    const stride = Math.ceil(W / 8);
+    const stride = Math.ceil(curW / 8);
     const dot = Math.max(4, Math.min(14, Math.floor((window.innerWidth - 60) / W)));
-    preview.width  = W * dot;
+    preview.width  = curW * dot;
     preview.height = H * dot;
     pctx.fillStyle = "#000";
     pctx.fillRect(0, 0, preview.width, preview.height);
 
     for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
+      for (let x = 0; x < curW; x++) {
         const on = (bits[y * stride + (x >> 3)] >> (7 - (x & 7))) & 1;
         pctx.fillStyle = on ? "#ff3b30" : "#1a1a1a";
         pctx.beginPath();
@@ -173,8 +210,10 @@
   }
 
   function update() {
-    $("sizeval").textContent = size.value;
-    $("thval").textContent   = th.value;
+    $("sizeval").textContent  = size.value;
+    $("thval").textContent    = th.value;
+    $("speedval").textContent = speed.value;
+    $("speedwrap").style.display = mode() === "scroll" ? "" : "none";
     packed = render();
     draw(packed);
   }
@@ -185,15 +224,17 @@
     status.className = "status";
     status.textContent = "جارٍ الإرسال…";
     try {
-      const stride = Math.ceil(W / 8);
-      const r = await fetch(`/frame?w=${stride}&h=${H}`, {
+      const stride = Math.ceil(curW / 8);
+      const r = await fetch(
+        `/frame?w=${stride}&h=${H}&mode=${mode()}&speed=${speed.value}`, {
         method: "POST",
         headers: {"Content-Type": "application/octet-stream"},
         body: packed,
       });
       if (!r.ok) throw new Error(await r.text() || r.status);
       status.className = "status ok";
-      status.textContent = "✓ تم العرض على اللوحة";
+      status.textContent = mode() === "scroll"
+        ? "✓ يتحرك على اللوحة" : "✓ تم العرض على اللوحة";
     } catch (e) {
       status.className = "status err";
       status.textContent = "فشل الإرسال: " + e.message;
@@ -203,7 +244,9 @@
   }
 
   ["input", "change"].forEach(ev => {
-    [txt, size, th, font].forEach(el => el.addEventListener(ev, update));
+    [txt, size, th, font, speed].forEach(el => el.addEventListener(ev, update));
+    document.querySelectorAll('input[name=mode]')
+            .forEach(el => el.addEventListener(ev, update));
   });
   $("send").addEventListener("click", send);
   window.addEventListener("resize", () => packed && draw(packed));

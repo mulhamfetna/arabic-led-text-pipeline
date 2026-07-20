@@ -171,9 +171,10 @@ menu "Arabic LED text pipeline"
 
         config FRAME_MAX_PAYLOAD
             int "Maximum frame payload (bytes)"
-            default 512
+            default 2048
             help
-                64x32 needs 256. 512 leaves room for wider scroll buffers.
+                A scrolling phrase is sent as one wide frame, so this bounds the
+                longest message: 2048 bytes at 8 rows is 2040 pixels wide.
 
     endmenu
 

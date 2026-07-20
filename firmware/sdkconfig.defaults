@@ -18,3 +18,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 # on RX and logs leave on TX, so inbound frames are not corrupted by it.
 CONFIG_FRAME_UART_ENABLE=y
 CONFIG_FRAME_UART_NUM=0
+
+# Determined empirically with the corner probe on 2026-07-20: the module is
+# column-addressed (digit selects a column) with bit 0 at the top, which is
+# index 5 = transpose + flipY. Derived from the four observed corners and
+# confirmed by simulation before flashing.
+CONFIG_MAX7219_ORIENTATION=5

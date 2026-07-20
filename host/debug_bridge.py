@@ -42,16 +42,22 @@ _ser = None
 _ser_lock = threading.Lock()
 
 
-def build_frame(payload: bytes, w_bytes: int, h_rows: int) -> bytes:
-    """
-    Wire format: SOH | w_bytes | h_rows | payload | crc32 (LE).
+FLAG_SCROLL = 0x01
 
-    CRC covers the two header bytes plus the payload, matching frame_crc32()
+
+def build_frame(payload: bytes, w_bytes: int, h_rows: int,
+                scroll: bool = False, speed_ms: int = 60) -> bytes:
+    """
+    Wire format: SOH | w_bytes | h_rows | flags | speed | payload | crc32 (LE).
+
+    CRC covers the four header bytes plus the payload, matching frame_crc32()
     in the firmware. zlib.crc32 is CRC-32/ISO-HDLC, the same polynomial and
     conventions the MCU implements - which is exactly why that variant was
     chosen for the protocol.
     """
-    header = struct.pack("BB", w_bytes, h_rows)
+    header = struct.pack("BBBB", w_bytes, h_rows,
+                         FLAG_SCROLL if scroll else 0,
+                         max(10, min(255, speed_ms)))
     crc = zlib.crc32(header + payload) & 0xFFFFFFFF
     return bytes([SOH]) + header + payload + struct.pack("<I", crc)
 
@@ -102,13 +108,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_error(400, msg)
             return
 
-        frame = build_frame(payload, w_bytes, h_rows)
+        scroll = qs.get("mode") == "scroll"
+        speed = int(qs.get("speed", 60))
+        frame = build_frame(payload, w_bytes, h_rows, scroll, speed)
         with _ser_lock:
             _ser.write(frame)
             _ser.flush()
 
         print(f"  → {w_bytes*8}x{h_rows}px, {len(payload)}B payload, "
-              f"{len(frame)}B frame, crc={frame[-4:][::-1].hex()}")
+              f"{'scroll@'+str(speed)+'ms' if scroll else 'static'}, "
+              f"crc={frame[-4:][::-1].hex()}")
         render_ascii(payload, w_bytes, h_rows)
 
         self.send_response(200)
