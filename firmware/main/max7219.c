@@ -210,7 +210,7 @@ esp_err_t max7219_clear(max7219_dev_t *dev)
  * This function is the entire "transposition layer" the architecture calls
  * for: everything upstream of it, host included, stays panel-agnostic.
  */
-static uint8_t pack_digit(const max7219_dev_t *dev, const framebuffer_t *fb,
+static uint8_t pack_digit(const max7219_dev_t *dev, const canvas_t *fb,
                           int mod, int digit)
 {
     /*
@@ -240,7 +240,7 @@ static uint8_t pack_digit(const max7219_dev_t *dev, const framebuffer_t *fb,
         if (dev->mapping.flip_x) px = MODULE_PX - 1 - px;
         if (dev->mapping.flip_y) py = MODULE_PX - 1 - py;
 
-        if (fb_get_pixel(fb, x0 + px, y0 + py)) {
+        if (canvas_get_mono(fb, x0 + px, y0 + py, 128)) {
             out |= (uint8_t)(1u << bit);
         }
     }
@@ -271,7 +271,7 @@ const char *max7219_orientation_name(int index)
     return (index >= 0 && index < MAX7219_ORIENTATION_COUNT) ? names[index] : "?";
 }
 
-esp_err_t max7219_render(max7219_dev_t *dev, const framebuffer_t *fb)
+esp_err_t max7219_render_canvas(max7219_dev_t *dev, const canvas_t *fb)
 {
     uint8_t *row = malloc((size_t)dev->modules);
     if (!row) {
@@ -289,3 +289,58 @@ esp_err_t max7219_render(max7219_dev_t *dev, const framebuffer_t *fb)
     free(row);
     return err;
 }
+
+
+/* ─── display_driver_t implementation ─────────────────────────────────────── */
+
+static max7219_dev_t *s_dev;
+
+static esp_err_t drv_init(void)
+{
+    const max7219_config_t cfg = {
+        .pin_clk   = CONFIG_MAX7219_PIN_CLK,
+        .pin_din   = CONFIG_MAX7219_PIN_DIN,
+        .pin_cs    = CONFIG_MAX7219_PIN_CS,
+        .cols      = CONFIG_MAX7219_COLS,
+        .rows      = CONFIG_MAX7219_ROWS,
+        .intensity = CONFIG_MAX7219_INTENSITY,
+        .mapping   = max7219_orientation(CONFIG_MAX7219_ORIENTATION < 0
+                                         ? 0 : CONFIG_MAX7219_ORIENTATION),
+#ifdef CONFIG_MAX7219_CHAIN_SERPENT
+        .chain     = MAX7219_CHAIN_SERPENTINE,
+#else
+        .chain     = MAX7219_CHAIN_ROW_MAJOR,
+#endif
+    };
+    return max7219_init(&cfg, &s_dev);
+}
+
+static void     drv_deinit(void)     { max7219_deinit(s_dev); s_dev = NULL; }
+static uint16_t drv_width(void)      { return max7219_width(s_dev); }
+static uint16_t drv_height(void)     { return max7219_height(s_dev); }
+static bool     drv_has_colour(void) { return false; }
+
+static esp_err_t drv_brightness(uint8_t level)
+{
+    /* The panel takes 0-15; the interface speaks 0-255. */
+    return max7219_set_intensity(s_dev, (uint8_t)(level * 15 / 255));
+}
+
+static esp_err_t drv_render(const canvas_t *c)
+{
+    return max7219_render_canvas(s_dev, c);
+}
+
+/* Exposed for the bring-up probe, which needs to try orientations at runtime. */
+max7219_dev_t *max7219_active(void) { return s_dev; }
+
+const display_driver_t max7219_display = {
+    .name           = "MAX7219",
+    .init           = drv_init,
+    .deinit         = drv_deinit,
+    .width          = drv_width,
+    .height         = drv_height,
+    .has_colour     = drv_has_colour,
+    .render         = drv_render,
+    .set_brightness = drv_brightness,
+};

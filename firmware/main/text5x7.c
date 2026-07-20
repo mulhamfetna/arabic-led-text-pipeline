@@ -15,14 +15,14 @@ int text5x7_width(const char *s)
     return n > 0 ? n * TEXT5X7_ADVANCE - 1 : 0;
 }
 
-void text5x7_draw(framebuffer_t *fb, const char *s, int x, int y)
+void text5x7_draw(canvas_t *c, const char *s, int x, int y)
 {
     for (const char *p = s; *p; p++, x += TEXT5X7_ADVANCE) {
         /* Skip glyphs that fall entirely outside the panel. */
         if (x + FONT5X7_WIDTH < 0) {
             continue;
         }
-        if (x >= fb->width) {
+        if (x >= c->width) {
             break;
         }
 
@@ -31,7 +31,7 @@ void text5x7_draw(framebuffer_t *fb, const char *s, int x, int y)
             const uint8_t bits = glyph[col];
             for (int row = 0; row < FONT5X7_HEIGHT; row++) {
                 if (bits & (1u << row)) {
-                    fb_set_pixel(fb, x + col, y + row, true);
+                    canvas_set_mono(c, x + col, y + row, true);
                 }
             }
         }

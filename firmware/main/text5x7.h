@@ -6,7 +6,7 @@
 #pragma once
 
 #include "font5x7.h"
-#include "framebuffer.h"
+#include "canvas.h"
 
 /*
  * Reference-only Latin renderer.
@@ -22,4 +22,4 @@
 int text5x7_width(const char *s);
 
 /* Draws s with its top-left at (x, y). Clipping is handled by fb_set_pixel. */
-void text5x7_draw(framebuffer_t *fb, const char *s, int x, int y);
+void text5x7_draw(canvas_t *c, const char *s, int x, int y);

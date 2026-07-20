@@ -73,16 +73,24 @@ static void rx_task(void *arg)
             continue;
         }
 
-        uint8_t hdr[4];   /* w_bytes, h_rows, flags, speed */
+        uint8_t hdr[9];   /* ver, w, h, fmt, flags, speed, R, G, B */
         if (!read_exact(ctx->uart_num, hdr, sizeof(hdr), byte_timeout)) {
             ESP_LOGW(TAG, "header timeout");
             continue;
         }
-        const uint8_t w_bytes = hdr[0];
-        const uint8_t h_rows  = hdr[1];
-        const uint8_t flags   = hdr[2];
-        const uint8_t speed   = hdr[3];
-        const size_t  len     = (size_t)w_bytes * h_rows;
+        if (hdr[0] != FRAME_VERSION) {
+            ESP_LOGW(TAG, "frame version %u, expected %u - dropping",
+                     hdr[0], FRAME_VERSION);
+            continue;
+        }
+        const uint8_t w_bytes = hdr[1];
+        const uint8_t h_rows  = hdr[2];
+        const uint8_t fmt     = hdr[3];
+        const uint8_t flags   = hdr[4];
+        const uint8_t speed   = hdr[5];
+        const size_t  len     = (fmt == CANVAS_RGB)
+                              ? (size_t)w_bytes * h_rows * 3
+                              : (size_t)w_bytes * h_rows;
 
         if (len == 0 || len > CONFIG_FRAME_MAX_PAYLOAD) {
             ESP_LOGW(TAG, "implausible geometry %ux%u (%u bytes), dropping",
@@ -121,6 +129,8 @@ static void rx_task(void *arg)
         const frame_meta_t meta = {
             .w_bytes  = w_bytes,
             .h_rows   = h_rows,
+            .fmt      = fmt,
+            .colour   = { hdr[6], hdr[7], hdr[8] },
             .scroll    = (flags & FRAME_FLAG_SCROLL) != 0,
             .rightward = (flags & FRAME_FLAG_RIGHTWARD) != 0,
             .speed_ms = speed ? speed : 60,

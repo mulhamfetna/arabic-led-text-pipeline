@@ -1,5 +1,23 @@
 menu "Arabic LED text pipeline"
 
+    choice DISPLAY_DRIVER
+        prompt "Display type"
+        default DISPLAY_MAX7219
+        help
+            Which panel is attached.
+
+            Everything above the driver layer is identical for all three - the
+            browser shapes the text and sends pixels either way. Only geometry,
+            colour handling and current limiting differ.
+
+        config DISPLAY_MAX7219
+            bool "MAX7219 8x8 modules"
+        config DISPLAY_WS2812B
+            bool "WS2812B addressable RGB strip"
+        config DISPLAY_P10
+            bool "P10 DMD panel (UNTESTED)"
+    endchoice
+
     menu "MAX7219 wiring"
 
         config MAX7219_PIN_CLK
@@ -171,10 +189,14 @@ menu "Arabic LED text pipeline"
 
         config FRAME_MAX_PAYLOAD
             int "Maximum frame payload (bytes)"
-            default 2048
+            default 12288
             help
-                A scrolling phrase is sent as one wide frame, so this bounds the
-                longest message: 2048 bytes at 8 rows is 2040 pixels wide.
+                A scrolling phrase is sent as one wide frame, so this bounds
+                the longest message.
+
+                RGB frames are 24x the size of mono ones: 12288 bytes carries a
+                512-pixel mono phrase at 8 rows, or a 512-pixel RGB one. Raising
+                it further costs RAM that the WiFi stack also wants.
 
     endmenu
 
