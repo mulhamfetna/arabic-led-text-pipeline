@@ -33,55 +33,48 @@ static framebuffer_t  s_fb;
 /* Set once the first real frame arrives, so the pattern stops getting in the way. */
 static volatile bool s_got_frame;
 
-static void show(const char *what)
-{
-    if (s_got_frame) {
-        return;
-    }
-    ESP_LOGI(TAG, "pattern: %s", what);
-    max7219_render(s_panel, &s_fb);
-    vTaskDelay(pdMS_TO_TICKS(2500));
-}
-
 /*
- * Each step is asymmetric on purpose: a symmetric pattern looks identical
- * under several mappings and tells you nothing. Watch the panel, compare
- * against what the log says should be lit, and set the mapping in menuconfig.
+ * Corner probe.
+ *
+ * Lights one corner at a time at a FIXED orientation (index 0, identity), so
+ * every observation is interpretable. Watching where each logical corner
+ * actually appears pins down transpose/flipX/flipY exactly - no guessing from
+ * a glyph, and no cycling through candidates hoping one looks right.
+ *
+ * Report the four observed physical positions and the orientation index falls
+ * straight out of them.
  */
 static void bringup_pattern(void)
 {
-    const uint16_t w = max7219_width(s_panel);
-    const uint16_t h = max7219_height(s_panel);
+    const int w = max7219_width(s_panel);
+    const int h = max7219_height(s_panel);
+
+    const struct { int x, y; const char *name; } corners[] = {
+        { 0,     0,     "TOP-LEFT"     },
+        { w - 1, 0,     "TOP-RIGHT"    },
+        { w - 1, h - 1, "BOTTOM-RIGHT" },
+        { 0,     h - 1, "BOTTOM-LEFT"  },
+    };
+
+    /* Identity: any flip here would corrupt the very thing being measured. */
+    max7219_set_mapping(s_panel, max7219_orientation(0));
+    ESP_LOGW(TAG, "corner probe at orientation 0 (identity) - watch where each lands");
 
     while (!s_got_frame) {
-        for (int i = 0; i < MAX7219_ORIENTATION_COUNT && !s_got_frame; i++) {
-            max7219_set_mapping(s_panel, max7219_orientation(i));
-            ESP_LOGI(TAG, "=== orientation %s ===", max7219_orientation_name(i));
-
-            /*
-             * Readable text is a far better mapping test than abstract shapes:
-             * a human instantly sees mirrored, upside-down or rotated letters,
-             * whereas a lit line looks plausible under several orientations.
-             */
+        for (int i = 0; i < 4 && !s_got_frame; i++) {
             fb_clear(&s_fb);
-            text5x7_draw(&s_fb, CONFIG_SELFTEST_WORD, 0, 0);
-            show("the word " CONFIG_SELFTEST_WORD ", upright and readable");
-
-            /* Corner dot disambiguates the two flips once rotation is right. */
-            fb_clear(&s_fb);
-            fb_set_pixel(&s_fb, 0, 0, true);
-            show("single pixel, should be the TOP-LEFT corner");
-
-            /* An L: unambiguous under rotation and reflection. */
-            fb_clear(&s_fb);
-            for (int y = 0; y < h; y++) {
-                fb_set_pixel(&s_fb, 0, y, true);
-            }
-            for (int x = 0; x < 5 && x < w; x++) {
-                fb_set_pixel(&s_fb, x, h - 1, true);
-            }
-            show("letter L, upright, at the far LEFT");
+            fb_set_pixel(&s_fb, corners[i].x, corners[i].y, true);
+            max7219_render(s_panel, &s_fb);
+            ESP_LOGI(TAG, "corner %d/4: logical %s  (fb x=%d y=%d)",
+                     i + 1, corners[i].name, corners[i].x, corners[i].y);
+            vTaskDelay(pdMS_TO_TICKS(3000));
         }
+
+        /* Blank gap so the start of the next cycle is unmistakable. */
+        fb_clear(&s_fb);
+        max7219_render(s_panel, &s_fb);
+        ESP_LOGI(TAG, "--- cycle end, blanking for 2s ---");
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
