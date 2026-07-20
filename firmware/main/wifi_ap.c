@@ -11,6 +11,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_idf_version.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "dhcpserver/dhcpserver.h"
@@ -226,6 +227,39 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
     ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
 
     /*
+     * RFC 8910: announce the portal URL in the DHCP reply itself (option 114).
+     *
+     * The DNS hijack below works by tricking the phone into noticing it is
+     * intercepted. That fails when the connectivity check runs over HTTPS,
+     * which modern Android and iOS increasingly do - nothing can intercept
+     * that without a certificate the phone would reject.
+     *
+     * Option 114 sidesteps the whole game: the phone is TOLD where the portal
+     * is, at the moment it gets its address, and raises the sign-in banner
+     * without probing anything.
+     *
+     * ESP_NETIF_CAPTIVEPORTAL_URI only exists from ESP-IDF v5.4, so this is
+     * conditional rather than required - the project still builds on 5.3.2,
+     * just with the less reliable detection.
+     */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+    static char portal_uri[] = "http://192.168.4.1/";
+    esp_err_t cp_err = esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
+                                              ESP_NETIF_CAPTIVEPORTAL_URI,
+                                              portal_uri,
+                                              (uint32_t)(sizeof(portal_uri) - 1));
+    if (cp_err == ESP_OK) {
+        ESP_LOGI(TAG, "RFC 8910 portal URI advertised via DHCP option 114");
+    } else {
+        ESP_LOGW(TAG, "could not set portal URI: %s", esp_err_to_name(cp_err));
+    }
+#else
+    ESP_LOGW(TAG, "ESP-IDF %d.%d has no DHCP option 114 - portal detection "
+                  "falls back to DNS interception, which HTTPS probes defeat",
+             ESP_IDF_VERSION_MAJOR, ESP_IDF_VERSION_MINOR);
+#endif
+
+    /*
      * With DNS handed out, the banner comes from two mechanisms together:
      *   1. DNS hijack - every lookup resolves to us (dns_task).
      *   2. Probe-URL redirects - the OS fetches its connectivity-check URL,
@@ -233,9 +267,7 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
      *
      * Same approach MikroTik and hotel portals use.
      *
-     * RFC 8910 DHCP option 114 would announce the portal URL directly and more
-     * reliably on iOS 14+/Android 11+, but ESP_NETIF_CAPTIVEPORTAL_URI only
-     * exists from ESP-IDF v5.4 and this builds against v5.3.2.
+     * These remain as the fallback for clients that ignore option 114.
      */
     ESP_ERROR_CHECK(esp_wifi_start());
 
