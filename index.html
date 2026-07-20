@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>arabic-led-text-pipeline — correct Arabic on LED panels</title>
+<meta name="description" content="Open-source system that renders correctly shaped Arabic on LED dot-matrix panels, driven from a phone browser with no app installed.">
+<meta property="og:title" content="arabic-led-text-pipeline">
+<meta property="og:description" content="Correct Arabic on LED dot-matrix panels, from a phone, with no app.">
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   A light page with one dark, emissive element.
+
+   The reflex for an LED project is a dark page with a red accent — which
+   would make the panel just another dark rectangle. Inverted, the panel is
+   the only lit thing on the page, which is how a sign actually looks in
+   daylight. The unlit LED is dark maroon rather than grey: a dead red diode
+   still shows its die colour, and grey is what makes fake LED graphics read
+   as fake.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --paper:   #f6f7f8;
+  --card:    #ffffff;
+  --ink:     #14181c;
+  --muted:   #6b7580;
+  --rule:    #e3e6e9;
+  --panel:   #0b0d10;   /* unlit panel body   */
+  --lit:     #ff3b21;   /* 625nm red          */
+  --unlit:   #2a1210;   /* dark die, not grey */
+  --link:    #b3301c;
+
+  --mono: ui-monospace, "DejaVu Sans Mono", "SF Mono", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ar:   "Noto Naskh Arabic", "Amiri", "Geeza Pro", "Times New Roman", serif;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px; margin-inline:auto; padding-inline:clamp(20px,5vw,40px)}
+a{color:var(--link)}
+
+/* ── masthead ───────────────────────────────────────────────────────────── */
+header{border-bottom:1px solid var(--rule); background:var(--card)}
+.masthead{display:flex; align-items:center; gap:16px; padding:16px 0; flex-wrap:wrap}
+.mark{font-family:var(--mono); font-weight:700; font-size:14px; letter-spacing:-.01em}
+.badges{margin-inline-start:auto; display:flex; gap:8px; flex-wrap:wrap}
+.badge{
+  font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+  border:1px solid var(--rule); border-radius:999px; padding:4px 11px;
+  color:var(--muted); text-decoration:none; background:var(--paper);
+}
+.badge:hover{border-color:var(--ink); color:var(--ink)}
+
+/* ── hero ───────────────────────────────────────────────────────────────── */
+.hero{padding:clamp(44px,7vw,84px) 0 clamp(28px,4vw,44px)}
+.eyebrow{
+  font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:18px;
+}
+.ar-big{
+  font-family:var(--ar); direction:rtl; font-size:clamp(38px,8vw,86px);
+  line-height:1.25; letter-spacing:0; margin-bottom:6px;
+}
+.hero h1{
+  font-family:var(--sans); font-size:clamp(19px,2.4vw,27px); font-weight:600;
+  line-height:1.35; max-width:22ch; margin:22px 0 14px; letter-spacing:-.015em;
+}
+.hero p{font-size:clamp(15px,1.6vw,18px); color:#3d4650; max-width:56ch}
+
+/* the signature: the same words, as the panel would show them */
+.asPixels{margin:10px 0 0; overflow-x:auto; padding-bottom:4px; direction:rtl}
+.asPixels canvas{margin-inline-start:auto}
+.asPixels canvas{display:block; image-rendering:pixelated}
+.asPixels .cap{direction:ltr; text-align:right;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  letter-spacing:.05em; margin-top:9px;
+}
+
+/* ── the live panel ─────────────────────────────────────────────────────── */
+.demo{
+  background:var(--card); border:1px solid var(--rule); border-radius:14px;
+  padding:clamp(18px,2.6vw,26px); margin:clamp(26px,4vw,40px) 0;
+}
+.demo-head{display:flex; align-items:baseline; gap:12px; margin-bottom:16px; flex-wrap:wrap}
+.demo-head h2{font-size:16px; font-weight:600}
+.demo-head span{font-family:var(--mono); font-size:11.5px; color:var(--muted)}
+.screen{
+  background:var(--panel); border-radius:10px; padding:clamp(14px,2vw,22px);
+  overflow-x:auto; direction:ltr;
+}
+.screen canvas{display:block; margin-inline:auto; image-rendering:pixelated}
+.controls{display:grid; grid-template-columns:1fr; gap:14px; margin-top:16px}
+@media (min-width:680px){ .controls{grid-template-columns:1.6fr 1fr 1fr} }
+label{display:block; font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:6px}
+input[type=text]{
+  width:100%; font-family:var(--ar); font-size:21px; direction:rtl;
+  padding:11px 13px; border:1px solid var(--rule); border-radius:9px;
+  background:var(--paper); color:var(--ink);
+}
+input[type=range]{width:100%; accent-color:var(--link)}
+.val{float:right; font-family:var(--mono); color:var(--ink)}
+.readout{
+  font-family:var(--mono); font-size:11.5px; color:var(--muted);
+  margin-top:12px; letter-spacing:.02em;
+}
+
+/* ── sections ───────────────────────────────────────────────────────────── */
+section{padding:clamp(40px,6vw,68px) 0; border-top:1px solid var(--rule)}
+.kicker{
+  font-family:var(--mono); font-size:12px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:12px;
+}
+h2.title{font-size:clamp(22px,3.2vw,32px); font-weight:650; letter-spacing:-.02em; margin-bottom:16px}
+section p{max-width:62ch; margin-bottom:14px; color:#39424c}
+
+/* the four contextual forms — the argument, made visible */
+.forms{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin:26px 0}
+.form{background:var(--card); border:1px solid var(--rule); border-radius:11px; padding:18px 14px; text-align:center}
+.form .glyph{font-family:var(--ar); font-size:44px; line-height:1.35; direction:rtl}
+.form .name{font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
+            text-transform:uppercase; color:var(--muted); margin-top:6px}
+
+/* pipeline stages — numbered because the order genuinely carries meaning */
+.stages{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
+        border-radius:11px; overflow:hidden; margin-top:24px}
+.stage{background:var(--card); padding:16px 18px; display:grid;
+       grid-template-columns:auto 1fr; gap:16px; align-items:baseline}
+.stage b{font-family:var(--mono); font-size:12px; color:var(--lit); font-weight:400}
+.stage h3{font-size:15px; font-weight:600; margin-bottom:3px}
+.stage p{font-size:14px; color:var(--muted); margin:0; max-width:none}
+.stage.mcu{background:#fbfbfc}
+.stage.mcu b{color:var(--muted)}
+
+table{border-collapse:collapse; width:100%; margin-top:20px; font-size:14.5px}
+th,td{border-bottom:1px solid var(--rule); padding:11px 12px; text-align:left; vertical-align:top}
+th{font-family:var(--mono); font-size:11px; letter-spacing:.07em; text-transform:uppercase;
+   color:var(--muted); font-weight:400}
+td:first-child{font-weight:550}
+.ok{color:#1a7f4b} .no{color:var(--muted)}
+
+pre{
+  background:var(--panel); color:#c8d0d8; border-radius:10px; padding:15px 17px;
+  overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.6; margin-top:18px;
+}
+pre .c{color:#7d8894}
+pre .h{color:var(--lit)}
+
+.cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:22px}
+.card{background:var(--card); border:1px solid var(--rule); border-radius:11px; padding:18px 20px}
+.card h3{font-size:15px; margin-bottom:6px}
+.card p{font-size:14px; color:var(--muted); margin:0}
+.card a{font-family:var(--mono); font-size:12.5px}
+
+.note{
+  border-inline-start:3px solid var(--lit); padding:2px 0 2px 16px;
+  margin:22px 0; color:#39424c; max-width:62ch;
+}
+
+footer{border-top:1px solid var(--rule); background:var(--card); padding:34px 0 46px}
+footer p{font-size:13.5px; color:var(--muted); max-width:none}
+footer a{font-family:var(--mono); font-size:13px}
+:focus-visible{outline:2px solid var(--link); outline-offset:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap masthead">
+    <span class="mark">arabic-led-text-pipeline</span>
+    <nav class="badges">
+      <a class="badge" href="https://github.com/mulhamfetna/arabic-led-text-pipeline">GitHub</a>
+      <a class="badge" href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.md">Manual</a>
+      <a class="badge" href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/LICENSE">AGPL-3.0</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="eyebrow">Open source · ESP32 · No app required</div>
+    <div class="ar-big" id="heroAr">لافتة تقرأ صحيحة</div>
+
+    <!-- The signature: the same words, as the panel renders them. -->
+    <div class="asPixels">
+      <canvas id="heroPx" aria-label="The same Arabic words rendered as LED pixels"></canvas>
+      <div class="cap">↑ the same words, as a panel shows them — 1 bit per pixel</div>
+    </div>
+
+    <h1>Correct Arabic on LED dot-matrix panels.</h1>
+    <p>Arabic letters change shape depending on their neighbours. Ordinary LED sign
+       controllers store one fixed picture per character, so they cannot. This does the
+       shaping in the phone's browser and sends the panel nothing but pixels.</p>
+  </div>
+
+  <!-- ── live demo: the actual pipeline, running here ────────────────────── -->
+  <div class="demo">
+    <div class="demo-head">
+      <h2>Try it</h2>
+      <span id="dims">32 × 8 pixels</span>
+    </div>
+
+    <div class="screen"><canvas id="panel" aria-label="Simulated LED panel"></canvas></div>
+
+    <div class="controls">
+      <div>
+        <label for="txt">Text</label>
+        <input type="text" id="txt" value="مرحبا" spellcheck="false">
+      </div>
+      <div>
+        <label for="size">Height <span class="val" id="sizeV">8</span></label>
+        <input type="range" id="size" min="5" max="8" value="8">
+      </div>
+      <div>
+        <label for="th">Stroke weight <span class="val" id="thV">128</span></label>
+        <input type="range" id="th" min="60" max="200" value="128">
+      </div>
+    </div>
+
+    <div class="readout" id="readout"></div>
+  </div>
+
+</div>
+
+<section id="why">
+  <div class="wrap">
+    <div class="kicker">Why this is hard</div>
+    <h2 class="title">One letter, four shapes</h2>
+    <p>Every Arabic letter takes a different form depending on what it joins to. The
+       letter <span style="font-family:var(--ar)">ع</span> is written four ways, and
+       choosing between them means looking at the neighbours.</p>
+
+    <div class="forms">
+      <div class="form"><div class="glyph">ع</div><div class="name">Isolated</div></div>
+      <div class="form"><div class="glyph">عـ</div><div class="name">Initial</div></div>
+      <div class="form"><div class="glyph">ـعـ</div><div class="name">Medial</div></div>
+      <div class="form"><div class="glyph">ـع</div><div class="name">Final</div></div>
+    </div>
+
+    <p>Some pairs must fuse outright:
+       <span style="font-family:var(--ar); font-size:1.25em">ل + ا = لا</span>.
+       Mandatory, not decorative.</p>
+
+    <div class="note">A controller that stores one picture per character code has no way to
+      ask what comes next. The limitation is architectural — it is not fixed by better fonts
+      or more pixels, which is why it persists in products people buy today.</div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2 class="title">The browser does the hard part</h2>
+    <p>Your phone already contains a complete Arabic layout engine — the one it uses for
+       everything else. The page borrows it, then hands the microcontroller a finished
+       image. Numbered because the order is load-bearing: each stage depends on the one
+       before it.</p>
+
+    <div class="stages">
+      <div class="stage"><b>01</b><div><h3>Shape</h3>
+        <p>Canvas draws the text, and the platform's own engine picks the contextual forms and ligatures.</p></div></div>
+      <div class="stage"><b>02</b><div><h3>Rasterise at 4×</h3>
+        <p>Drawn oversized, so stroke shape survives as grey coverage rather than being lost.</p></div></div>
+      <div class="stage"><b>03</b><div><h3>Downsample</h3>
+        <p>A box filter written in JavaScript, so every device computes identical coverage.</p></div></div>
+      <div class="stage"><b>04</b><div><h3>Threshold</h3>
+        <p>Grey becomes lit or unlit. The cutoff is a control, because the right value differs by font and size.</p></div></div>
+      <div class="stage"><b>05</b><div><h3>Pack</h3>
+        <p>Eight pixels per byte, row-major. Bit 7 of byte 0 is the top-left pixel.</p></div></div>
+      <div class="stage mcu"><b>06</b><div><h3>The panel just displays it</h3>
+        <p>No font, no shaping tables, no text logic on the device. It receives pixels and lights them.</p></div></div>
+    </div>
+
+    <div class="note">Because the microcontroller holds no font, changing typeface or size costs
+      nothing on the device — and any microcontroller can implement the receiver from the
+      published frame format alone.</div>
+  </div>
+</section>
+
+<section id="hardware">
+  <div class="wrap">
+    <div class="kicker">Hardware</div>
+    <h2 class="title">Four kinds of panel, one pipeline</h2>
+    <p>The panel type is a build-time setting. Everything above the driver is identical.</p>
+
+    <table>
+      <tr><th>Panel</th><th>Notes</th><th>Status</th></tr>
+      <tr><td>MAX7219 8×8</td><td>Cheapest way in. Chain or grid them.</td>
+          <td class="ok">Verified on hardware</td></tr>
+      <tr><td>WS2812B strip</td><td>Full colour. Firmware caps supply current.</td>
+          <td class="no">Builds, not yet run</td></tr>
+      <tr><td>P10 DMD</td><td>The standard outdoor panel, 32×16.</td>
+          <td class="no">Untested</td></tr>
+      <tr><td>74HC595 + ULN2803</td><td>Build your own, any geometry.</td>
+          <td class="no">Untested</td></tr>
+    </table>
+
+    <p style="margin-top:20px">You also need an ESP32 — any classic one — and five wires.</p>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <div class="kicker">Getting started</div>
+    <h2 class="title">Flash it, then join its WiFi</h2>
+
+<pre><span class="c"># ESP-IDF v5.3 or newer</span>
+git clone https://github.com/mulhamfetna/arabic-led-text-pipeline
+cd arabic-led-text-pipeline/firmware
+
+idf.py menuconfig          <span class="c"># choose your panel</span>
+idf.py -p /dev/ttyUSB0 <span class="h">flash monitor</span></pre>
+
+    <p style="margin-top:18px">The board then advertises its own WiFi network. Join it from a
+       phone and open <code style="font-family:var(--mono)">192.168.4.1</code>. No router, no
+       internet, no app.</p>
+
+    <div class="cols">
+      <div class="card"><h3>User manual</h3>
+        <p>Wiring, configuration, protocol, troubleshooting.</p>
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.md">manual.md</a> ·
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.ar.md">بالعربية</a></div>
+      <div class="card"><h3>Foundations</h3>
+        <p>How registers, SPI and LED multiplexing work, from zero.</p>
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/foundations.md">foundations.md</a> ·
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/foundations.ar.md">بالعربية</a></div>
+      <div class="card"><h3>Prior work</h3>
+        <p>What already exists, verified against primary sources.</p>
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/related-work.md">related-work.md</a></div>
+    </div>
+  </div>
+</section>
+
+<section id="honest">
+  <div class="wrap">
+    <div class="kicker">Where it stands</div>
+    <h2 class="title">What is not finished</h2>
+    <p>Arabic shaping on microcontrollers is not new — LVGL does it, and standalone Arduino
+       reshapers exist. What is missing is a Unicode-correct pipeline for <em>1-bit LED
+       matrices at 8–16 pixels</em>, which is the gap this fills.</p>
+    <p>Open questions, stated plainly: no published work was found on Arabic glyph design at
+       these pixel heights, so whether readable Arabic that small needs purpose-designed
+       letterforms is genuinely unknown. Output also varies slightly between devices, because
+       phones and laptops do not ship the same fonts. Two of the four drivers have never
+       been run on hardware.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p style="margin-bottom:10px">
+      <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline">Source</a> ·
+      <a href="https://orcid.org/0009-0006-4432-798X">Mulham Fetna</a> ·
+      AGPL-3.0-or-later
+    </p>
+    <p>If you use this in research, please cite it — see
+       <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/CITATION.cff">CITATION.cff</a>.</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+"use strict";
+
+/*
+ * The real pipeline, not an imitation.
+ *
+ * This is the same sequence the firmware's own web UI runs: shape via canvas,
+ * supersample 4x, box-filter down by hand, normalise to the observed peak,
+ * threshold, pack 8 pixels per byte. The page therefore demonstrates the
+ * product rather than describing it - the only missing piece is the hardware.
+ */
+const SS = 4;
+const off  = document.createElement("canvas");
+const octx = off.getContext("2d", {willReadFrequently:true});
+
+function pipeline(text, W, H, cut, fontStack) {
+  off.width = W * SS; off.height = H * SS;
+  octx.fillStyle = "#000"; octx.fillRect(0, 0, off.width, off.height);
+  octx.fillStyle = "#fff";
+  octx.font = `${H * SS}px ${fontStack}`;
+  octx.textBaseline = "middle";
+  octx.direction = "rtl";
+  octx.textAlign = "right";
+  octx.fillText(text, off.width - SS, off.height / 2);
+
+  /* Box filter here rather than drawImage: canvas resampling is unspecified
+     and differs between engines, which silently drops thin strokes on some
+     devices and not others. */
+  const src = octx.getImageData(0, 0, off.width, off.height).data;
+  const cov = new Float32Array(W * H);
+  let peak = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let sum = 0;
+      for (let sy = 0; sy < SS; sy++) {
+        const row = ((y * SS + sy) * off.width + x * SS) * 4;
+        for (let sx = 0; sx < SS; sx++) {
+          const i = row + sx * 4;
+          sum += 0.299*src[i] + 0.587*src[i+1] + 0.114*src[i+2];
+        }
+      }
+      const c = sum / (SS * SS);
+      cov[y * W + x] = c;
+      if (c > peak) peak = c;
+    }
+  }
+  const gain = peak > 8 ? 255 / peak : 1;
+
+  const bits = new Uint8Array(W * H);
+  let lit = 0;
+  for (let i = 0; i < W * H; i++) {
+    if (cov[i] * gain >= cut) { bits[i] = 1; lit++; }
+  }
+  return { bits, lit, peak };
+}
+
+function drawPanel(cv, bits, W, H, dot, gap) {
+  cv.width  = W * (dot + gap);
+  cv.height = H * (dot + gap);
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  const r = dot / 2;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const on = bits[y * W + x];
+      g.fillStyle = on ? "#ff3b21" : "#2a1210";
+      g.beginPath();
+      g.arc(x * (dot + gap) + r, y * (dot + gap) + r, r * 0.86, 0, 6.2832);
+      g.fill();
+    }
+  }
+}
+
+const AR = getComputedStyle(document.documentElement).getPropertyValue("--ar");
+
+/* ── the hero line, shown as the panel would show it ────────────────────── */
+const heroPx = document.getElementById("heroPx");
+function renderHero() {
+  const W = 112, H = 16;
+  const { bits } = pipeline(document.getElementById("heroAr").textContent.trim(),
+                            W, H, 118, AR);
+  const dot = Math.max(2, Math.min(6, Math.floor(
+    (Math.min(window.innerWidth, 1000) - 80) / W)) );
+  drawPanel(heroPx, bits, W, H, dot, Math.max(1, Math.round(dot / 3)));
+}
+
+/* ── the live panel ─────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const panel = $("panel"), txt = $("txt"), size = $("size"), th = $("th");
+
+function renderDemo() {
+  const H = +size.value, cut = +th.value;
+  const W = 32;
+  $("sizeV").textContent = H;
+  $("thV").textContent = cut;
+  $("dims").textContent = `${W} × ${H} pixels`;
+
+  const { bits, lit, peak } = pipeline(txt.value || " ", W, H, cut, AR);
+  const dot = Math.max(8, Math.min(20, Math.floor(
+    (Math.min(window.innerWidth, 940) - 80) / W)) );
+  drawPanel(panel, bits, W, H, dot, Math.max(2, Math.round(dot / 5)));
+
+  $("readout").textContent =
+    `${lit} pixels lit · peak ${Math.round(peak)} · `
+    + `${Math.ceil(W / 8) * H} bytes sent to the panel`;
+}
+
+["input","change"].forEach(e => {
+  [txt, size, th].forEach(el => el.addEventListener(e, renderDemo));
+});
+addEventListener("resize", () => { renderHero(); renderDemo(); });
+
+/* Fonts load asynchronously; rendering before they arrive measures the
+   fallback and produces the wrong pixels. */
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { renderHero(); renderDemo(); });
+}
+renderHero(); renderDemo();
+})();
+</script>
+</body>
+</html>
