@@ -42,11 +42,13 @@ _ser = None
 _ser_lock = threading.Lock()
 
 
-FLAG_SCROLL = 0x01
+FLAG_SCROLL    = 0x01
+FLAG_RIGHTWARD = 0x02
 
 
 def build_frame(payload: bytes, w_bytes: int, h_rows: int,
-                scroll: bool = False, speed_ms: int = 60) -> bytes:
+                scroll: bool = False, speed_ms: int = 60,
+                rightward: bool = False) -> bytes:
     """
     Wire format: SOH | w_bytes | h_rows | flags | speed | payload | crc32 (LE).
 
@@ -55,8 +57,8 @@ def build_frame(payload: bytes, w_bytes: int, h_rows: int,
     conventions the MCU implements - which is exactly why that variant was
     chosen for the protocol.
     """
-    header = struct.pack("BBBB", w_bytes, h_rows,
-                         FLAG_SCROLL if scroll else 0,
+    flags = (FLAG_SCROLL if scroll else 0) | (FLAG_RIGHTWARD if rightward else 0)
+    header = struct.pack("BBBB", w_bytes, h_rows, flags,
                          max(10, min(255, speed_ms)))
     crc = zlib.crc32(header + payload) & 0xFFFFFFFF
     return bytes([SOH]) + header + payload + struct.pack("<I", crc)
@@ -110,13 +112,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         scroll = qs.get("mode") == "scroll"
         speed = int(qs.get("speed", 60))
-        frame = build_frame(payload, w_bytes, h_rows, scroll, speed)
+        rightward = qs.get("dir") == "rtl"
+        frame = build_frame(payload, w_bytes, h_rows, scroll, speed, rightward)
         with _ser_lock:
             _ser.write(frame)
             _ser.flush()
 
         print(f"  → {w_bytes*8}x{h_rows}px, {len(payload)}B payload, "
-              f"{'scroll@'+str(speed)+'ms' if scroll else 'static'}, "
+              f"{'scroll '+('→RTL' if rightward else '←LTR')+'@'+str(speed)+'ms' if scroll else 'static'}, "
               f"crc={frame[-4:][::-1].hex()}")
         render_ascii(payload, w_bytes, h_rows)
 

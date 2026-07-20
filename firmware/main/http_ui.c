@@ -74,6 +74,9 @@ static esp_err_t frame_post(httpd_req_t *req)
         if (httpd_query_key_value(query, "mode", val, sizeof(val)) == ESP_OK) {
             meta.scroll = (strcmp(val, "scroll") == 0);
         }
+        if (httpd_query_key_value(query, "dir", val, sizeof(val)) == ESP_OK) {
+            meta.rightward = (strcmp(val, "rtl") == 0);
+        }
         if (httpd_query_key_value(query, "speed", val, sizeof(val)) == ESP_OK) {
             int sp = atoi(val);
             if (sp >= 10 && sp <= 500) {

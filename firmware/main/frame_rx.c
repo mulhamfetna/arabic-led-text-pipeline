@@ -121,7 +121,8 @@ static void rx_task(void *arg)
         const frame_meta_t meta = {
             .w_bytes  = w_bytes,
             .h_rows   = h_rows,
-            .scroll   = (flags & FRAME_FLAG_SCROLL) != 0,
+            .scroll    = (flags & FRAME_FLAG_SCROLL) != 0,
+            .rightward = (flags & FRAME_FLAG_RIGHTWARD) != 0,
             .speed_ms = speed ? speed : 60,
         };
         ctx->cb(ctx->payload, &meta, ctx->user);

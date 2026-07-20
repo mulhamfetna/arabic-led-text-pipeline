@@ -33,6 +33,7 @@ static framebuffer_t  s_fb;        /* exactly panel-sized: what gets rendered */
 static framebuffer_t  s_content;
 static SemaphoreHandle_t s_content_lock;
 static volatile bool     s_scroll;
+static volatile bool     s_rightward;
 static volatile uint16_t s_speed_ms = 60;
 
 #if CONFIG_MAX7219_ORIENTATION < 0
@@ -146,14 +147,16 @@ static void on_frame(const uint8_t *payload, const frame_meta_t *meta, void *use
     }
     memcpy(s_content.data, payload, len);
 
-    s_scroll   = meta->scroll && (px_w > s_fb.width);
+    s_scroll    = meta->scroll && (px_w > s_fb.width);
+    s_rightward = meta->rightward;
     s_speed_ms = meta->speed_ms;
     s_got_frame = true;
 
     xSemaphoreGive(s_content_lock);
 
-    ESP_LOGI(TAG, "frame %ux%u, mode=%s%s", px_w, meta->h_rows,
+    ESP_LOGI(TAG, "frame %ux%u, mode=%s%s%s", px_w, meta->h_rows,
              s_scroll ? "scroll" : "static",
+             s_scroll ? (s_rightward ? " rightward(RTL)" : " leftward(LTR)") : "",
              (meta->scroll && !s_scroll) ? " (fits panel, not scrolling)" : "");
 }
 
@@ -202,8 +205,13 @@ static void display_task(void *arg)
          * as one run-on string.
          */
         const int span = s_content.width + s_fb.width;
-        blit_window(offset);
-        offset = (offset + 1) % span;
+        blit_window(offset - s_fb.width);
+        /*
+         * Advancing the window rightward makes the content appear to travel
+         * leftward, and vice versa - hence the inverted sign here.
+         */
+        offset = s_rightward ? (offset - 1 + span) % span
+                             : (offset + 1) % span;
 
         const uint16_t delay = s_speed_ms;
         xSemaphoreGive(s_content_lock);
