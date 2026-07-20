@@ -5,6 +5,7 @@ idf_component_register(
         "framebuffer.c"
         "canvas.c"
         "display.c"
+        "ws2812b.c"
         "frame_rx.c"
         "font5x7.c"
         "text5x7.c"

@@ -102,6 +102,56 @@ menu "Arabic LED text pipeline"
               6 flipX+flipY    7 transpose+flipX+flipY
 
 
+    menu "WS2812B strip"
+        depends on DISPLAY_WS2812B
+
+        config WS2812B_PIN
+            int "Data pin (DIN) GPIO"
+            default 27
+            help
+                Single data wire. The strip also needs 5V and a GND shared
+                with the ESP32.
+
+        config WS2812B_COLS
+            int "LEDs across"
+            range 1 256
+            default 8
+
+        config WS2812B_ROWS
+            int "Rows"
+            range 1 64
+            default 8
+            help
+                Leave at 1 for a single straight strip; text then scrolls along
+                it as a one-pixel band.
+
+        config WS2812B_SERPENTINE
+            bool "Serpentine folding"
+            default y
+            help
+                The strip folds at the end of each row, so alternate rows run
+                backwards. This is how most hand-built matrices are wired
+                because it needs no return wires.
+
+                Turn this off for a progressive layout, where every row runs
+                the same direction and a wire returns from the end of each row
+                to the start of the next.
+
+        config WS2812B_MAX_MA
+            int "Supply current budget (mA)"
+            range 100 20000
+            default 2000
+            help
+                Frames estimated to exceed this are scaled down before being
+                emitted.
+
+                A WS2812B draws about 60mA at full white, so 256 of them reach
+                roughly 15A - far beyond what USB or a small supply can give.
+                2000mA is safe on a decent USB supply. Raise it only to match
+                a supply you actually have.
+
+    endmenu
+
     menu "Hardware self-test (Latin reference)"
 
         config SELFTEST_ENABLE
