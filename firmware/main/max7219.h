@@ -9,7 +9,8 @@
 #include <stdint.h>
 
 #include "esp_err.h"
-#include "framebuffer.h"
+#include "canvas.h"
+#include "display.h"
 
 /*
  * How a module's 8 "digit" registers map onto its 8x8 LED grid.
@@ -75,9 +76,12 @@ esp_err_t max7219_set_intensity(max7219_dev_t *dev, uint8_t intensity);
 esp_err_t max7219_set_mapping(max7219_dev_t *dev, max7219_mapping_t mapping);
 esp_err_t max7219_clear(max7219_dev_t *dev);
 
-/*
- * Pushes the framebuffer to the cascade, translating from the wire format's
- * row-major packing into whatever the modules expect. fb may be larger than
- * the panel; the top-left region is shown.
- */
-esp_err_t max7219_render(max7219_dev_t *dev, const framebuffer_t *fb);
+/* Renders a canvas. An RGB canvas is reduced by luma, since this panel is
+   monochrome and cannot do better than lit/unlit. */
+esp_err_t max7219_render_canvas(max7219_dev_t *dev, const canvas_t *c);
+
+/* The display_driver_t face of this panel; see display.h. */
+extern const display_driver_t max7219_display;
+
+/* The live device, for the bring-up probe that varies orientation at runtime. */
+max7219_dev_t *max7219_active(void);

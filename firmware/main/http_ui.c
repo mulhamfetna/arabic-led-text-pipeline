@@ -21,6 +21,7 @@ extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
 typedef struct {
     uint16_t         panel_w;
     uint16_t         panel_h;
+    bool             has_colour;
     http_frame_cb_t  cb;
     void            *user;
 } ui_ctx_t;
@@ -42,9 +43,11 @@ static esp_err_t index_get(httpd_req_t *req)
 static esp_err_t panel_get(httpd_req_t *req)
 {
     ui_ctx_t *ctx = req->user_ctx;
-    char body[64];
-    int n = snprintf(body, sizeof(body), "{\"width\":%u,\"height\":%u}",
-                     ctx->panel_w, ctx->panel_h);
+    char body[96];
+    int n = snprintf(body, sizeof(body),
+                     "{\"width\":%u,\"height\":%u,\"colour\":%s}",
+                     ctx->panel_w, ctx->panel_h,
+                     ctx->has_colour ? "true" : "false");
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, body, n);
 }
@@ -62,7 +65,8 @@ static esp_err_t frame_post(httpd_req_t *req)
 
     char query[96] = {0};
     unsigned w_bytes = 0, h_rows = 0;
-    frame_meta_t meta = { .speed_ms = 60 };
+    frame_meta_t meta = { .speed_ms = 60, .fmt = CANVAS_MONO,
+                          .colour = { 255, 255, 255 } };
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
         char val[16];
         if (httpd_query_key_value(query, "w", val, sizeof(val)) == ESP_OK) {
@@ -73,6 +77,15 @@ static esp_err_t frame_post(httpd_req_t *req)
         }
         if (httpd_query_key_value(query, "mode", val, sizeof(val)) == ESP_OK) {
             meta.scroll = (strcmp(val, "scroll") == 0);
+        }
+        if (httpd_query_key_value(query, "fmt", val, sizeof(val)) == ESP_OK) {
+            meta.fmt = (atoi(val) == 1) ? CANVAS_RGB : CANVAS_MONO;
+        }
+        if (httpd_query_key_value(query, "rgb", val, sizeof(val)) == ESP_OK) {
+            const unsigned v = (unsigned)strtoul(val, NULL, 16);
+            meta.colour[0] = (uint8_t)((v >> 16) & 0xFF);
+            meta.colour[1] = (uint8_t)((v >> 8) & 0xFF);
+            meta.colour[2] = (uint8_t)(v & 0xFF);
         }
         if (httpd_query_key_value(query, "dir", val, sizeof(val)) == ESP_OK) {
             meta.rightward = (strcmp(val, "rtl") == 0);
@@ -87,7 +100,10 @@ static esp_err_t frame_post(httpd_req_t *req)
     meta.w_bytes = (uint8_t)w_bytes;
     meta.h_rows  = (uint8_t)h_rows;
 
-    const size_t expected = (size_t)w_bytes * h_rows;
+    /* RGB carries width in pixels and three bytes each; mono is 1bpp packed. */
+    const size_t expected = (meta.fmt == CANVAS_RGB)
+                          ? (size_t)w_bytes * h_rows * 3
+                          : (size_t)w_bytes * h_rows;
     if (expected == 0 || expected > CONFIG_FRAME_MAX_PAYLOAD) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad geometry");
         return ESP_FAIL;
@@ -153,15 +169,16 @@ static esp_err_t redirect_to_root(httpd_req_t *req, httpd_err_code_t err)
     return portal_redirect(req);
 }
 
-esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
+esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h, bool has_colour,
                         http_frame_cb_t cb, void *user)
 {
     ui_ctx_t *ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
         return ESP_ERR_NO_MEM;
     }
-    ctx->panel_w = panel_w;
-    ctx->panel_h = panel_h;
+    ctx->panel_w    = panel_w;
+    ctx->panel_h    = panel_h;
+    ctx->has_colour = has_colour;
     ctx->cb      = cb;
     ctx->user    = user;
 
@@ -209,6 +226,7 @@ esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
     }
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, redirect_to_root);
 
-    ESP_LOGI(TAG, "web UI on http://192.168.4.1/ (panel %ux%u)", panel_w, panel_h);
+    ESP_LOGI(TAG, "web UI on http://192.168.4.1/ (panel %ux%u, colour=%s)",
+             panel_w, panel_h, has_colour ? "yes" : "no");
     return ESP_OK;
 }

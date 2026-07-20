@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "canvas.h"
 #include "esp_err.h"
 
 /*
@@ -32,10 +33,18 @@ typedef struct {
      */
     bool     rightward;
     uint16_t speed_ms;      /* delay per 1px scroll step */
+
+    /*
+     * CANVAS_MONO or CANVAS_RGB. Mono keeps the payload at 1 bit per pixel and
+     * carries `colour` to say what a lit pixel means on a display that has
+     * colour; RGB carries the colour per pixel and ignores it.
+     */
+    uint8_t  fmt;
+    uint8_t  colour[3];
 } frame_meta_t;
 
 typedef void (*http_frame_cb_t)(const uint8_t *payload, const frame_meta_t *meta,
                                 void *user);
 
-esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h,
+esp_err_t http_ui_start(uint16_t panel_w, uint16_t panel_h, bool has_colour,
                         http_frame_cb_t cb, void *user);

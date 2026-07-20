@@ -13,9 +13,17 @@
 #include "http_ui.h"   /* frame_meta_t is shared by both transports */
 
 /*
- * Wire format (see docs/wire-format.md):
+ * Wire format v2 (see docs/wire-format.md):
  *
- *   0x01 | w_bytes | h_rows | flags | speed | payload[w_bytes*h_rows] | crc32[4]
+ *   0x01 | ver | w | h | fmt | flags | speed | R | G | B | payload | crc32[4]
+ *
+ * ver is checked rather than assumed. Silently misparsing a frame produces
+ * plausible garbage on the panel; rejecting one produces a log line naming the
+ * problem, which is strictly better.
+ *
+ * fmt 0 = 1bpp mono (w is width in BYTES), 1 = 24bpp RGB (w is width in
+ * PIXELS, payload is w*h*3). R/G/B applies to mono frames only - it is what a
+ * lit pixel means on a display that has colour to give.
  *
  * flags bit0 = scroll, bit1 = scroll rightward (Arabic reading order).
  * speed is milliseconds per 1px scroll step.
@@ -30,7 +38,8 @@
  *
  * NOTE: this is the provisional format. It is not frozen until #6 closes.
  */
-#define FRAME_SOH 0x01
+#define FRAME_SOH     0x01
+#define FRAME_VERSION 2
 
 /* Computed over `len` bytes; seed with 0 for a fresh CRC. */
 uint32_t frame_crc32(uint32_t seed, const uint8_t *data, size_t len);

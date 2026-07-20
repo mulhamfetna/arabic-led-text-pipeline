@@ -87,13 +87,20 @@ function clean(s) {
 const PAGE_BREAK =
   '\n```{=openxml}\n<w:p><w:r><w:br w:type="page"/></w:r></w:p>\n```\n';
 
+/*
+ * Content flows rather than taking one page per slide.
+ *
+ * A slide is sized for a projector at reading distance, so on A4 it fills
+ * roughly a third of the page and leaves the rest blank - 34 pages of mostly
+ * white. Breaking only at section boundaries keeps the document navigable
+ * while letting the text use the page it is printed on.
+ */
 const out = [];
 let lastSection = -1;
 
 S.forEach((s, i) => {
-  if (i > 0) out.push(PAGE_BREAK);
-
   if (s.sect !== lastSection) {
+    if (lastSection !== -1) out.push(PAGE_BREAK);
     out.push(`\n## ${SECTIONS[s.sect]}\n`);
     lastSection = s.sect;
   }
@@ -134,6 +141,7 @@ const checks = [
               - (md.match(/^```\{=openxml\}$/gm) || []).length) / 2],
   ["slides", S.length,
              (md.match(/^### /gm) || []).length + 1],
+  ["sections", SECTIONS.length, (md.match(/^## /gm) || []).length],
 ];
 let bad = false;
 for (const [what, want, got] of checks) {
