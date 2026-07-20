@@ -3,10 +3,109 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>arabic-led-text-pipeline — correct Arabic on LED panels</title>
-<meta name="description" content="Open-source system that renders correctly shaped Arabic on LED dot-matrix panels, driven from a phone browser with no app installed.">
-<meta property="og:title" content="arabic-led-text-pipeline">
-<meta property="og:description" content="Correct Arabic on LED dot-matrix panels, from a phone, with no app.">
+<title>Arabic text on LED dot-matrix displays — open-source ESP32 pipeline | arabic-led-text-pipeline</title>
+<meta name="description" content="Open-source ESP32 firmware that displays correctly shaped Arabic on LED dot-matrix panels — MAX7219, P10 DMD, WS2812B and 74HC595. Contextual letter forms and لا/الله ligatures are shaped in the phone's browser, so the microcontroller needs no font. AGPL-3.0, DOI-archived.">
+<meta name="keywords" content="Arabic LED display, Arabic LED matrix, ESP32 Arabic text, P10 DMD Arabic, MAX7219 Arabic, Arabic scrolling sign, Arabic text shaping embedded, WS2812B Arabic, 74HC595 LED matrix, HUB12, Arabic dot matrix, لوحة LED عربية, لافتة عربية">
+<link rel="canonical" href="https://led.mulhamfetna.com/">
+<meta name="author" content="Mulham Fetna">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://led.mulhamfetna.com/">
+<meta property="og:site_name" content="arabic-led-text-pipeline">
+<meta property="og:title" content="Correct Arabic on LED dot-matrix displays — open-source ESP32 pipeline">
+<meta property="og:description" content="Ordinary LED sign controllers cannot render Arabic, because letters change shape by context. This shapes the text in the phone's browser and sends the panel finished pixels.">
+<meta property="og:locale" content="en">
+<meta property="og:locale:alternate" content="ar">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Correct Arabic on LED dot-matrix displays">
+<meta name="twitter:description" content="Open-source ESP32 pipeline. MAX7219, P10, WS2812B, 74HC595. No app, no router, no internet.">
+
+<!--
+  Structured data.
+
+  Written for machine readers - search engines and the retrieval layers behind
+  AI assistants - which quote definitional statements and comparison facts far
+  more readily than marketing prose. Every claim here matches the page and the
+  repository; a page that overstates its status gets cited overstating it, and
+  that is worse than not being cited.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "arabic-led-text-pipeline",
+      "description": "Open-source ESP32 firmware and browser pipeline that renders correctly shaped Arabic text on 1-bit LED dot-matrix panels. Arabic contextual letter forms and mandatory ligatures are resolved by the phone browser's own text engine; the microcontroller receives a packed 1-bit framebuffer and stores no font.",
+      "codeRepository": "https://github.com/mulhamfetna/arabic-led-text-pipeline",
+      "programmingLanguage": ["C", "JavaScript"],
+      "runtimePlatform": "ESP32 / ESP-IDF",
+      "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+      "author": {
+        "@type": "Person",
+        "name": "Mulham Fetna",
+        "identifier": "https://orcid.org/0009-0006-4432-798X",
+        "url": "https://orcid.org/0009-0006-4432-798X"
+      },
+      "keywords": "Arabic text rendering, LED dot matrix, ESP32, MAX7219, P10 DMD, WS2812B, 74HC595, Unicode shaping, embedded systems",
+      "url": "https://led.mulhamfetna.com/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Why do LED signs show Arabic letters disconnected?",
+          "acceptedAnswer": {"@type":"Answer","text":"Because conventional LED sign controllers store one fixed bitmap per character code. Arabic letters take up to four different shapes depending on their neighbours — isolated, initial, medial and final — so choosing the correct shape requires looking at surrounding letters. A per-character lookup table has no mechanism to do that. The limitation is architectural, not a matter of font quality or resolution."}
+        },
+        {
+          "@type": "Question",
+          "name": "Can an ESP32 display Arabic text correctly?",
+          "acceptedAnswer": {"@type":"Answer","text":"Yes, if the shaping happens off the device. In arabic-led-text-pipeline the ESP32 serves a web page from its own flash; the phone browser's text engine performs Arabic shaping on a canvas, converts the result to 1-bit pixels, and posts a packed framebuffer. The microcontroller stores no font and runs no text logic, so it needs neither HarfBuzz nor shaping tables."}
+        },
+        {
+          "@type": "Question",
+          "name": "Which LED panels does arabic-led-text-pipeline support?",
+          "acceptedAnswer": {"@type":"Answer","text":"Four driver types share one pipeline: MAX7219 8x8 modules in a chain or grid (verified on hardware); WS2812B addressable RGB strips with firmware current limiting; P10 DMD panels over HUB12; and hand-built matrices using 74HC595 shift registers with a ULN2803 transistor array. The panel type is a build-time menuconfig selection."}
+        },
+        {
+          "@type": "Question",
+          "name": "Does it need internet or a router?",
+          "acceptedAnswer": {"@type":"Answer","text":"No. The ESP32 runs its own WiFi access point and DHCP server, and serves the control page from flash memory at 192.168.4.1. A phone joins that network directly. No router, no internet connection, no SIM card and no installed app are required."}
+        },
+        {
+          "@type": "Question",
+          "name": "What is the wire protocol between the host and the panel?",
+          "acceptedAnswer": {"@type":"Answer","text":"A documented frame: SOH (0x01), version byte, width, height, pixel format, flags, scroll speed, an RGB triple, the payload, and a CRC-32 checksum. Monochrome payloads are 1 bit per pixel packed row-major with bit 7 of byte 0 as the top-left pixel. The CRC is CRC-32/ISO-HDLC, identical to Python zlib.crc32. The format is documented so any microcontroller can implement a receiver without reading the project's source."}
+        },
+        {
+          "@type": "Question",
+          "name": "Is Arabic readable on an 8-pixel-tall LED panel?",
+          "acceptedAnswer": {"@type":"Answer","text":"It is the hardest open problem in the project. A survey found no published work on Arabic glyph design at 8 to 16 pixel heights, unlike Latin bitmap typography which has decades of accumulated practice. Whether readable Arabic at that scale requires purpose-designed letterforms rather than reduction of existing typefaces is an open research question."}
+        }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "name": "Display Arabic text on an LED matrix with an ESP32",
+      "totalTime": "PT30M",
+      "tool": [
+        {"@type":"HowToTool","name":"ESP32 development board"},
+        {"@type":"HowToTool","name":"LED matrix (MAX7219, P10, WS2812B or 74HC595-based)"},
+        {"@type":"HowToTool","name":"USB data cable"}
+      ],
+      "step": [
+        {"@type":"HowToStep","name":"Wire the panel","text":"Connect five wires between the ESP32 and the panel: 5V, ground, data, clock and chip select. Avoid GPIO12, which is a strapping pin the ESP32 reads at boot."},
+        {"@type":"HowToStep","name":"Install ESP-IDF","text":"Clone Espressif's SDK with --recursive and run install.sh esp32, then source export.sh in each terminal."},
+        {"@type":"HowToStep","name":"Select the panel and flash","text":"Run idf.py menuconfig to choose the display type, then idf.py -p /dev/ttyUSB0 flash monitor."},
+        {"@type":"HowToStep","name":"Determine the pixel orientation","text":"Generic MAX7219 modules wire their driver to the LED grid differently and it cannot be detected in software. The firmware lights one corner at a time; note where each appears and set the orientation index."},
+        {"@type":"HowToStep","name":"Connect and type","text":"Join the ARABIC-LED WiFi network from a phone, open 192.168.4.1, type Arabic and send it to the panel."}
+      ]
+    }
+  ]
+}
+</script>
 <style>
 /* ─────────────────────────────────────────────────────────────────────────
    Same palette and typography as the slide deck.
@@ -168,6 +267,35 @@ pre .h{color:var(--lit)}
 footer{border-top:1px solid var(--rule); background:var(--surface); padding:34px 0 46px}
 footer p{font-size:13.5px; color:var(--muted); max-width:none}
 footer a{font-family:var(--mono); font-size:13px}
+.lede{font-size:clamp(16px,1.9vw,20px); color:var(--ink); max-width:60ch; margin-bottom:18px}
+.uses{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin-top:24px}
+.use{background:var(--surface); border:1px solid var(--rule); border-radius:11px; padding:18px 20px}
+.use .ar{font-family:var(--ar); direction:rtl; font-size:22px; color:var(--lit); margin-bottom:8px}
+.use h3{font-size:15px; margin-bottom:5px}
+.use p{font-size:13.5px; color:var(--muted); margin:0; max-width:none}
+.qa{border-top:1px solid var(--rule); padding:20px 0}
+.qa:last-child{border-bottom:1px solid var(--rule)}
+.qa h3{font-size:16px; margin-bottom:8px; font-weight:600}
+.qa p{font-size:14.5px; color:var(--dim); margin:0 0 8px; max-width:66ch}
+.qa p:last-child{margin-bottom:0}
+.road{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
+      border-radius:11px; overflow:hidden; margin-top:22px}
+.road-row{background:var(--surface); padding:15px 18px; display:grid;
+          grid-template-columns:104px 1fr; gap:16px; align-items:baseline}
+.tag{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+     border:1px solid var(--rule); border-radius:999px; padding:3px 9px; text-align:center; color:var(--muted)}
+.tag.now{border-color:var(--lit); color:var(--lit)}
+.road-row h3{font-size:14.5px; margin-bottom:3px}
+.road-row p{font-size:13.5px; color:var(--muted); margin:0; max-width:none}
+ol.steps{counter-reset:s; list-style:none; margin-top:20px}
+ol.steps li{counter-increment:s; position:relative; padding-left:38px; margin-bottom:20px; max-width:64ch}
+ol.steps li::before{content:counter(s,decimal-leading-zero); position:absolute; left:0; top:1px;
+  font-family:var(--mono); font-size:12px; color:var(--lit)}
+ol.steps h3{font-size:15px; margin-bottom:4px}
+ol.steps p{font-size:14px; color:var(--dim); margin:0 0 8px; max-width:none}
+ol.steps pre{margin-top:8px}
+code{font-family:var(--mono); font-size:.92em; background:#0d1116; border:1px solid var(--rule);
+     border-radius:4px; padding:1px 5px}
 :focus-visible{outline:2px solid var(--lit); outline-offset:3px}
 </style>
 </head>
@@ -308,35 +436,283 @@ footer a{font-family:var(--mono); font-size:13px}
   </div>
 </section>
 
+<section id="uses">
+  <div class="wrap">
+    <div class="kicker">Where it is used</div>
+    <h2 class="title">Signs that need to say something in Arabic</h2>
+    <p class="lede">Anywhere a message changes often enough that reprinting it is a nuisance,
+       and the audience reads Arabic.</p>
+
+    <div class="uses">
+      <div class="use">
+        <div class="ar">أوقات الصلاة</div>
+        <h3>Mosques</h3>
+        <p>Prayer times, iqama countdowns, announcements. The times change daily and the sign
+           has to keep up without anyone fetching a laptop.</p>
+      </div>
+      <div class="use">
+        <div class="ar">عروض اليوم</div>
+        <h3>Shops and markets</h3>
+        <p>Prices, offers, opening hours. A shopkeeper updates it from the phone already in
+           their pocket, with no app to install and no account to make.</p>
+      </div>
+      <div class="use">
+        <div class="ar">إعلانات المدرسة</div>
+        <h3>Schools</h3>
+        <p>Notices in the corridor, exam schedules, event reminders — changed by whoever is
+           at the front desk rather than whoever knows the software.</p>
+      </div>
+      <div class="use">
+        <div class="ar">رقم المريض</div>
+        <h3>Clinics and queues</h3>
+        <p>Calling the next number, naming a room. Short strings, changed constantly, which is
+           exactly the case a printed sign cannot serve.</p>
+      </div>
+      <div class="use">
+        <div class="ar">أهلاً وسهلاً</div>
+        <h3>Events and venues</h3>
+        <p>Welcome messages, session titles, directions. Wide panels scroll longer text and
+           the direction control keeps Arabic reading correctly.</p>
+      </div>
+      <div class="use">
+        <div class="ar">المحطة القادمة</div>
+        <h3>Transport</h3>
+        <p>Next stop, platform, delay notices. The protocol is documented, so an existing
+           system can drive the panel without adopting this firmware wholesale.</p>
+      </div>
+      <div class="use">
+        <div class="ar">تعليم وهندسة</div>
+        <h3>Teaching and research</h3>
+        <p>Every stage is inspectable — shaping, thresholding, packing, the wire format. It is
+           a working example of a text pipeline rather than a black box.</p>
+      </div>
+      <div class="use">
+        <div class="ar">مشاريع شخصية</div>
+        <h3>Makers</h3>
+        <p>Desk signs, room labels, anything with a name on it. Four panel types are supported,
+           including one you can build from shift registers.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="start">
   <div class="wrap">
-    <div class="kicker">Getting started</div>
-    <h2 class="title">Flash it, then join its WiFi</h2>
+    <div class="kicker">Install and run</div>
+    <h2 class="title">From nothing to Arabic on a panel</h2>
+    <p class="lede">About thirty minutes if the parts are on the desk. You need an ESP32, a
+       panel, five wires and a USB <em>data</em> cable — charge-only cables are the classic
+       time sink.</p>
 
-<pre><span class="c"># ESP-IDF v5.3 or newer</span>
-git clone https://github.com/mulhamfetna/arabic-led-text-pipeline
+    <ol class="steps">
+      <li>
+        <h3>Wire the panel</h3>
+        <p>Five wires for a MAX7219: <code>VIN</code>→VCC, <code>GND</code>→GND,
+           <code>GPIO13</code>→DIN, <code>GPIO14</code>→CLK, <code>GPIO27</code>→CS.
+           Use 5 V, not 3.3 V — at 3.3 V the LEDs are dim and the driver's logic thresholds
+           stop matching, which gives flicker rather than an honest failure.</p>
+        <p><strong>Do not use GPIO12.</strong> It is a strapping pin the ESP32 reads at boot to
+           choose its flash voltage. A wire holding it high stops the board booting entirely,
+           and nothing about the symptom points at your wiring.</p>
+      </li>
+
+      <li>
+        <h3>Install ESP-IDF</h3>
+        <p>Espressif's SDK. The <code>--recursive</code> flag matters: without it you get an
+           incomplete download and a confusing build failure.</p>
+<pre>git clone -b v5.3.2 <span class="h">--recursive</span> https://github.com/espressif/esp-idf.git ~/esp/esp-idf
+cd ~/esp/esp-idf && ./install.sh esp32
+. ./export.sh          <span class="c"># needed in every new terminal</span></pre>
+      </li>
+
+      <li>
+        <h3>Choose your panel and flash</h3>
+        <p>The panel type is a build-time setting. Everything above the driver is identical
+           for all four.</p>
+<pre>git clone https://github.com/mulhamfetna/arabic-led-text-pipeline
 cd arabic-led-text-pipeline/firmware
 
-idf.py menuconfig          <span class="c"># choose your panel</span>
+idf.py menuconfig      <span class="c"># Arabic LED text pipeline → Display type</span>
 idf.py -p /dev/ttyUSB0 <span class="h">flash monitor</span></pre>
+        <p>You never press a button on the board — the USB-serial chip resets it into its
+           bootloader automatically.</p>
+      </li>
 
-    <p style="margin-top:18px">The board then advertises its own WiFi network. Join it from a
-       phone and open <code style="font-family:var(--mono)">192.168.4.1</code>. No router, no
-       internet, no app.</p>
+      <li>
+        <h3>Find the pixel orientation</h3>
+        <p>Generic MAX7219 modules wire their driver chip to the LED grid differently, and it
+           <em>cannot</em> be detected in software — the chip has no readback line. So the
+           firmware lights one corner at a time and logs which corner it intends:</p>
+<pre>corner 1/4: logical TOP-LEFT      (x=0 y=0)
+corner 2/4: logical TOP-RIGHT     (x=7 y=0)
+corner 3/4: logical BOTTOM-RIGHT  (x=7 y=7)
+corner 4/4: logical BOTTOM-LEFT   (x=0 y=7)</pre>
+        <p>Write down where each dot actually appears. Four observations determine the answer
+           exactly — set the index in <code>menuconfig</code> and reflash. No guessing.</p>
+      </li>
+
+      <li>
+        <h3>Check it with Latin first</h3>
+        <p>A self-test scrolls <code>HELLO WORLD</code> at boot. This proves wiring, transport,
+           geometry and packing using text whose correct appearance needs no interpretation.
+           <strong>If English does not render correctly, Arabic never will</strong> — so fix
+           that before going further.</p>
+      </li>
+
+      <li>
+        <h3>Connect a phone and type</h3>
+        <p>The board advertises a WiFi network called <code>ARABIC-LED</code>. Join it and open
+           <code>http://192.168.4.1/</code>. No router, no internet, no app, no account.</p>
+        <p>Type Arabic, watch the preview, press send. The preview is pixel-exact — it is
+           drawn from the same bytes the panel receives.</p>
+      </li>
+    </ol>
+
+    <h2 class="title" style="margin-top:48px">Using it day to day</h2>
+    <p>Six controls, and one of them needs explaining.</p>
+
+    <table>
+      <tr><th>Control</th><th>What it does</th></tr>
+      <tr><td>النص — Text</td><td>Arabic, Latin, or both. Shaping happens in your phone's own text engine.</td></tr>
+      <tr><td>ثابت / متحرك</td><td>Static fits the message to the panel; scrolling sends the whole phrase and moves it.</td></tr>
+      <tr><td>اتجاه الحركة</td><td>Arabic travels rightward, Latin leftward. Arabic's first letter is at the right end of the visual string, so it must move right to be revealed in reading order.</td></tr>
+      <tr><td>سرعة الحركة</td><td>Milliseconds per pixel step. 60 ms reads comfortably.</td></tr>
+      <tr><td>حجم الخط</td><td>Text height in pixels.</td></tr>
+      <tr><td>سماكة الخط</td><td>The threshold where a grey anti-aliased pixel becomes lit. Lower gives fatter strokes. At 8 pixels tall this is the difference between a letter that reads and a blob — which is why it is a control and not a constant.</td></tr>
+    </table>
 
     <div class="cols">
       <div class="card"><h3>User manual</h3>
-        <p>Wiring, configuration, protocol, troubleshooting.</p>
+        <p>Wiring for every panel, full configuration reference, the wire protocol, and troubleshooting by symptom.</p>
         <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.md">manual.md</a> ·
-        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.ar.md">بالعربية</a></div>
+        <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/manual.ar.md">دليل المستخدم</a></div>
       <div class="card"><h3>Foundations</h3>
-        <p>How registers, SPI and LED multiplexing work, from zero.</p>
+        <p>What a register is, how LED multiplexing works, SPI, and ESP-IDF versus Arduino — written from zero.</p>
         <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/foundations.md">foundations.md</a> ·
         <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/foundations.ar.md">بالعربية</a></div>
       <div class="card"><h3>Prior work</h3>
-        <p>What already exists, verified against primary sources.</p>
+        <p>What already exists — LVGL, u8g2, commercial controllers — verified against primary sources.</p>
         <a href="https://github.com/mulhamfetna/arabic-led-text-pipeline/blob/main/docs/related-work.md">related-work.md</a></div>
     </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="kicker">Questions</div>
+    <h2 class="title">Frequently asked</h2>
+
+    <div class="qa">
+      <h3>Why do LED signs show Arabic letters disconnected?</h3>
+      <p>Because conventional controllers store one fixed bitmap per character code. Arabic
+         letters take up to four shapes depending on their neighbours — isolated, initial,
+         medial, final — so picking the right one means looking at surrounding letters. A
+         per-character lookup has no mechanism to do that.</p>
+      <p>The limitation is architectural. Better fonts and more pixels do not fix it, which is
+         why it persists in products sold today.</p>
+    </div>
+
+    <div class="qa">
+      <h3>Can an ESP32 really display Arabic correctly?</h3>
+      <p>Yes — if the shaping happens off the device. The ESP32 serves a page from its own
+         flash; the phone browser's text engine shapes the Arabic on a canvas, converts it to
+         1-bit pixels, and posts a packed framebuffer. The microcontroller stores no font and
+         runs no text logic, so it needs neither HarfBuzz nor shaping tables.</p>
+    </div>
+
+    <div class="qa">
+      <h3>Does it need internet, a router, or an app?</h3>
+      <p>None of them. The board runs its own WiFi access point and DHCP server and serves the
+         control page from flash at <code>192.168.4.1</code>. A phone joins it directly. This
+         matters for a sign in a shop or a mosque, where there may be no network at all.</p>
+    </div>
+
+    <div class="qa">
+      <h3>What does it cost to build?</h3>
+      <p>An ESP32 development board and an 8×8 MAX7219 module are the cheapest entry — a few
+         dollars each at the time of writing. A P10 panel costs more but covers far more area.
+         The firmware, documentation and protocol are free under AGPL-3.0.</p>
+    </div>
+
+    <div class="qa">
+      <h3>Can I use it with my own controller or software?</h3>
+      <p>Yes. The wire protocol is documented so that any microcontroller can implement a
+         receiver from the specification alone, without reading this project's source. That is
+         a stated design goal rather than a courtesy.</p>
+    </div>
+
+    <div class="qa">
+      <h3>Is Arabic legible on an 8-pixel-tall panel?</h3>
+      <p>This is the hardest open problem here, and worth being honest about. A survey found
+         <em>no published work</em> on Arabic glyph design at 8–16 pixel heights — Latin has
+         decades of bitmap-font craft, Arabic at that size is largely uncharted.</p>
+      <p>Whether readable Arabic that small needs purpose-designed letterforms, rather than
+         reduction of existing typefaces, is genuinely unknown. Taller panels are easier.</p>
+    </div>
+
+    <div class="qa">
+      <h3>How is this different from LVGL or u8g2?</h3>
+      <p>LVGL already does Arabic shaping and bidi on microcontrollers — that is not the gap,
+         and it is credited. But LVGL targets anti-aliased TFT screens, not 1-bit panels at
+         8–16 pixels.</p>
+      <p>u8g2 drives MAX7219 and ships Persian fonts, but its maintainer declined contextual
+         shaping in 2018 on the grounds that the tables would be too large. Disconnected-letter
+         reports have stayed open there from 2018 to 2024.</p>
+      <p>The gap this fills is narrow and specific: a Unicode-correct Arabic pipeline for 1-bit
+         LED matrices.</p>
+    </div>
+
+    <div class="qa">
+      <h3>Can it show colour?</h3>
+      <p>On WS2812B addressable strips, yes — the wire format carries a 24-bit RGB mode, and
+         the firmware estimates supply current and scales frames down to stay inside a
+         configured budget. MAX7219 and P10 panels are monochrome; a colour frame sent to them
+         is reduced by luma.</p>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="kicker">What comes next</div>
+    <h2 class="title">Roadmap</h2>
+    <p class="lede">Stated as intentions, not achievements. Anything already working is in the
+       hardware table above; everything here is planned.</p>
+
+    <div class="road">
+      <div class="road-row"><span class="tag now">In progress</span><div>
+        <h3>Arabic legibility below 16 pixels</h3>
+        <p>Determining whether readable Arabic at 8px needs purpose-designed letterforms. The
+           open research question, and the one that would most improve the result.</p></div></div>
+      <div class="road-row"><span class="tag">Planned</span><div>
+        <h3>Hardware verification of P10, WS2812B and 74HC595</h3>
+        <p>Three of the four drivers build but have never driven a panel. Each needs the same
+           corner-probe bring-up the MAX7219 went through.</p></div></div>
+      <div class="road-row"><span class="tag">Planned</span><div>
+        <h3>Message playlists and scheduling</h3>
+        <p>Several messages cycling unattended, so the sign keeps working after the phone
+           walks away.</p></div></div>
+      <div class="road-row"><span class="tag">Planned</span><div>
+        <h3>Embedded webfont for cross-device consistency</h3>
+        <p>Phones and laptops do not ship the same fonts, so identical text can render
+           differently. Shipping a subset font would make output deterministic everywhere.</p></div></div>
+      <div class="road-row"><span class="tag">Planned</span><div>
+        <h3>Freezing the wire protocol</h3>
+        <p>Version 2 works but framing is not final — resynchronisation after a desync still
+           leans on the CRC to reject false starts.</p></div></div>
+      <div class="road-row"><span class="tag">Considering</span><div>
+        <h3>Larger panels and parallel scan chains</h3>
+        <p>Beyond about 32 rows a scanned matrix is dim, because each row is lit a smaller
+           fraction of the time. Splitting the panel into halves scanned in parallel is the
+           real remedy.</p></div></div>
+      <div class="road-row"><span class="tag">Considering</span><div>
+        <h3>Other right-to-left and complex scripts</h3>
+        <p>The architecture is not Arabic-specific — the browser shapes whatever it can.
+           Persian, Urdu and Hebrew are plausible without firmware changes.</p></div></div>
+    </div>
+
+    <p style="margin-top:24px">Contributions are welcome, and so are reports from anyone who
+       actually builds one — particularly on panels nobody here has tested.</p>
   </div>
 </section>
 
